@@ -4,6 +4,10 @@ on:
   push:
     tags:
       - "v*"
+  # Allows manually re-running the pipeline against an existing tag (e.g. to
+  # retest one publish job after fixing credentials) via:
+  #   gh workflow run release.yml --ref v0.2.0
+  workflow_dispatch:
 
 jobs:
   verify-version:
