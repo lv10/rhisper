@@ -170,12 +170,12 @@ jobs:
             cloudsmith push deb lv10-labs/rhisper/${distro} dist/*.deb
           done
 
-  # Mirrors packaging/homebrew/rhisper.rb into the lv10/homebrew-rhisper tap
-  # repo with url/sha256 filled in for this tag, opening a PR there.
-  # Needs a one-time manual setup before this succeeds: create the
-  # lv10/homebrew-rhisper repo, then add a HOMEBREW_TAP_TOKEN secret (a PAT
-  # with contents:write on that repo) - same shape as the Cloudsmith/AUR
-  # secrets that were added after this pipeline already existed.
+  # Bumps Formula/rhisper.rb in the lv10/homebrew-rhisper tap repo
+  # (https://github.com/lv10/homebrew-rhisper) with url/sha256 for this tag,
+  # opening a PR there. Needs a HOMEBREW_TAP_TOKEN secret (a PAT with
+  # contents:write on that repo) before this succeeds - same shape as the
+  # Cloudsmith/AUR secrets that were added after this pipeline already
+  # existed.
   publish-homebrew:
     needs: build
     runs-on: ubuntu-latest
@@ -185,7 +185,7 @@ jobs:
       - uses: mislav/bump-homebrew-formula-action@v3
         with:
           formula-name: rhisper
-          formula-path: rhisper.rb
+          formula-path: Formula/rhisper.rb
           homebrew-tap: lv10/homebrew-rhisper
           base-branch: main
           download-url: https://github.com/lv10/rhisper/archive/refs/tags/${{ github.ref_name }}.tar.gz
