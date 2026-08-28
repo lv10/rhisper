@@ -182,7 +182,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: mislav/bump-homebrew-formula-action@v3
+      # Pinned to v4, not v3: v3 is a stale floating branch (last updated
+      # Sept 2025) that predates an upstream fix for GitHub's tarball
+      # redirect returning HTTP 303 instead of 302 - v3 fails every run with
+      # "unexpected HTTP 303 response". v4 has the fix and the same inputs.
+      - uses: mislav/bump-homebrew-formula-action@v4
         with:
           formula-name: rhisper
           formula-path: Formula/rhisper.rb
