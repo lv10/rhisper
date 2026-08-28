@@ -1,4 +1,4 @@
-# Maintainer: rhisper contributors
+# Maintainer: Luis Villamarin <luisvillamarin at gmail dot com>
 pkgname=rhisper
 pkgver=0.2.0
 pkgrel=1
@@ -16,6 +16,10 @@ backup=("usr/share/rhisper/rhisperrc.default")
 # OPTIONS=(... lto ...). Confirmed via local reproduction - do not remove.
 options=('!lto')
 source=("$pkgname-$pkgver.tar.gz::https://github.com/lv10/rhisper/archive/refs/tags/v$pkgver.tar.gz")
+# SKIP here is only for local dev builds against an untagged tree (see
+# packaging/README or the AUR release CI job). The version pushed to AUR on
+# each release has this replaced with the tagged tarball's real sha256sum -
+# AUR convention discourages SKIP for a fixed-URL source.
 sha256sums=('SKIP')
 
 prepare() {

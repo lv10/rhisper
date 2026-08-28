@@ -37,22 +37,37 @@ sudo dnf install -y pipewire-utils ffmpeg</code></pre>
 
 <details>
 <summary>Arch Linux (AUR)</summary>
-<pre><code>yay -S rhisper</code></pre>
+<pre><code>yay -S rhisper
+# or
+paru -S rhisper</code></pre>
 or manually from <code>packaging/PKGBUILD</code>:
 <pre><code>git clone --depth 1 https://github.com/lv10/rhisper.git
 cd rhisper/packaging && makepkg -si</code></pre>
+Note: this installs via an AUR helper or <code>makepkg</code>, not bare <code>pacman -S</code> — pacman itself has no native AUR support, which is true of every AUR package, not just this one.
 </details>
 
 <details>
-<summary>Debian / Ubuntu</summary>
-Download the <code>.deb</code> from the <a href="https://github.com/lv10/rhisper/releases">latest release</a>, then:
-<pre><code>sudo apt install ./rhisper_*.deb</code></pre>
+<summary>Debian / Ubuntu (APT repository)</summary>
+<pre><code>curl -1sLf 'https://dl.cloudsmith.io/public/rhisper/rhisper/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/rhisper-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/rhisper-archive-keyring.gpg] https://dl.cloudsmith.io/public/rhisper/rhisper/deb/ubuntu jammy main" | sudo tee /etc/apt/sources.list.d/rhisper.list
+sudo apt update && sudo apt install rhisper</code></pre>
+Or download the <code>.deb</code> directly from the <a href="https://github.com/lv10/rhisper/releases">latest release</a> and <code>sudo apt install ./rhisper_*.deb</code>.
 </details>
 
 <details>
 <summary>Fedora / RHEL / AlmaLinux / Rocky</summary>
 Download the <code>.rpm</code> from the <a href="https://github.com/lv10/rhisper/releases">latest release</a>, then:
 <pre><code>sudo dnf install ./rhisper-*.rpm</code></pre>
+</details>
+
+<details>
+<summary>cargo (any distro with Rust installed)</summary>
+<pre><code>cargo install rhisper</code></pre>
+<code>cargo install</code> only builds and places the two binaries on your <code>$PATH</code> — it has no post-install hook, so it can't install the udev rule the .deb/.rpm/AUR packages ship. Without it, the daemon can't open <code>/dev/uinput</code> unless you're already in the <code>input</code> group. After installing, either run:
+<pre><code>sudo usermod -aG input $USER   # then log out and back in</code></pre>
+or install the udev rule yourself:
+<pre><code>curl -sL https://raw.githubusercontent.com/lv10/rhisper/main/packaging/rhisper-uinput.rules | sudo tee /usr/lib/udev/rules.d/60-rhisper-uinput.rules
+sudo udevadm control --reload-rules && sudo udevadm trigger --subsystem-match=misc --attr-match=name=uinput</code></pre>
 </details>
 
 <details>
