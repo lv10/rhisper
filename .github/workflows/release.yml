@@ -159,12 +159,13 @@ jobs:
           name: packages
           path: dist
 
-      - uses: cloudsmith-io/cloudsmith-cli-action@v1
+      - uses: cloudsmith-io/cloudsmith-cli-action@v3
         with:
-          oidc-namespace: rhisper # TODO: replace with real Cloudsmith namespace once created
+          oidc-namespace: lv10-labs
+          oidc-service-slug: rhisper-ci
 
       - name: Push .deb to Cloudsmith
         run: |
           for distro in ubuntu/jammy ubuntu/noble debian/bookworm; do
-            cloudsmith push deb rhisper/rhisper/${distro} dist/*.deb
+            cloudsmith push deb lv10-labs/rhisper/${distro} dist/*.deb
           done

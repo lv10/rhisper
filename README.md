@@ -48,8 +48,8 @@ Note: this installs via an AUR helper or <code>makepkg</code>, not bare <code>pa
 
 <details>
 <summary>Debian / Ubuntu (APT repository)</summary>
-<pre><code>curl -1sLf 'https://dl.cloudsmith.io/public/rhisper/rhisper/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/rhisper-archive-keyring.gpg
-echo "deb [signed-by=/usr/share/keyrings/rhisper-archive-keyring.gpg] https://dl.cloudsmith.io/public/rhisper/rhisper/deb/ubuntu jammy main" | sudo tee /etc/apt/sources.list.d/rhisper.list
+<pre><code>curl -1sLf 'https://dl.cloudsmith.io/public/lv10-labs/rhisper/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/rhisper-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/rhisper-archive-keyring.gpg] https://dl.cloudsmith.io/public/lv10-labs/rhisper/deb/ubuntu jammy main" | sudo tee /etc/apt/sources.list.d/rhisper.list
 sudo apt update && sudo apt install rhisper</code></pre>
 Or download the <code>.deb</code> directly from the <a href="https://github.com/lv10/rhisper/releases">latest release</a> and <code>sudo apt install ./rhisper_*.deb</code>.
 </details>
