@@ -53,14 +53,18 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           git archive --format=tar.gz --prefix="xhisper-${version}/" -o "xhisper-${version}.tar.gz" "$GITHUB_REF_NAME"
 
+      - name: Collect packages into a flat directory
+        run: |
+          mkdir -p dist
+          cp target/debian/*.deb dist/
+          cp target/generate-rpm/*.rpm dist/
+          cp xhisper-*.tar.gz dist/
+
       - name: Upload packages
         uses: actions/upload-artifact@v4
         with:
           name: packages
-          path: |
-            target/debian/*.deb
-            target/generate-rpm/*.rpm
-            xhisper-*.tar.gz
+          path: dist/*
           if-no-files-found: error
 
   release:
@@ -70,13 +74,11 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: packages
+          path: dist
 
       - name: Create draft GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           draft: true
           generate_release_notes: true
-          files: |
-            *.deb
-            *.rpm
-            xhisper-*.tar.gz
+          files: dist/*
