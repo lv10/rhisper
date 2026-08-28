@@ -36,5 +36,10 @@ keyboard-layout : us
 
 # Silence Detection:
 silence-threshold  : -50
-silence-percentage : 95
+# min-speech-seconds: minimum contiguous stretch of audio above
+# silence-threshold required anywhere in the recording to consider it real
+# speech. This is deliberately an absolute duration, not a percentage of
+# the whole recording - how long you pause before or after speaking has no
+# bearing on whether you said something.
+min-speech-seconds : 0.3
 

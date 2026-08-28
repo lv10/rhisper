@@ -39,7 +39,7 @@ pub struct Config {
     pub non_ascii_default_delay: f64,
     pub keyboard_layout: String,
     pub silence_threshold: f64,
-    pub silence_percentage: f64,
+    pub min_speech_seconds: f64,
     pub provider: Provider,
     pub api_base_url: String,
     pub model: String,
@@ -56,7 +56,7 @@ impl Default for Config {
             non_ascii_default_delay: 0.025,
             keyboard_layout: "us".to_string(),
             silence_threshold: -50.0,
-            silence_percentage: 95.0,
+            min_speech_seconds: 0.3,
             provider: Provider::Groq,
             api_base_url: String::new(),
             model: String::new(),
@@ -130,8 +130,8 @@ pub fn parse(contents: &str) -> Config {
             "silence-threshold" => {
                 config.silence_threshold = parse_f64(&value, config.silence_threshold)
             }
-            "silence-percentage" => {
-                config.silence_percentage = parse_f64(&value, config.silence_percentage)
+            "min-speech-seconds" => {
+                config.min_speech_seconds = parse_f64(&value, config.min_speech_seconds)
             }
             "provider" => {
                 config.provider = match value.as_str() {
@@ -181,8 +181,8 @@ mod tests {
         assert_eq!(from_template.keyboard_layout, defaults.keyboard_layout);
         assert_eq!(from_template.silence_threshold, defaults.silence_threshold);
         assert_eq!(
-            from_template.silence_percentage,
-            defaults.silence_percentage
+            from_template.min_speech_seconds,
+            defaults.min_speech_seconds
         );
     }
 
@@ -198,7 +198,7 @@ non-ascii-initial-delay : 0.5
 non-ascii-default-delay : 0.1
 keyboard-layout : dk
 silence-threshold  : -30
-silence-percentage : 80
+min-speech-seconds : 0.5
 provider : openai
 api-base-url : "https://example.com/v1"
 model : "whisper-1"
@@ -212,7 +212,7 @@ model : "whisper-1"
         assert_eq!(c.non_ascii_default_delay, 0.1);
         assert_eq!(c.keyboard_layout, "dk");
         assert_eq!(c.silence_threshold, -30.0);
-        assert_eq!(c.silence_percentage, 80.0);
+        assert_eq!(c.min_speech_seconds, 0.5);
         assert_eq!(c.provider, Provider::OpenAi);
         assert_eq!(c.api_base_url, "https://example.com/v1");
         assert_eq!(c.model, "whisper-1");

@@ -133,9 +133,19 @@ fn run_toggle(tool: &ToolClient, config: &Config, wrap_key: Option<ToolCommand>)
         let report = silence::analyze(
             audio::RECORDING_PATH,
             config.silence_threshold,
-            config.silence_percentage,
+            config.min_speech_seconds,
         );
         if report.is_silent {
+            log_event(
+                "Silence check",
+                &format!(
+                    "longest active stretch {:.3}s < min-speech-seconds {:.3}s (threshold {}dB)",
+                    report.longest_active_seconds,
+                    config.min_speech_seconds,
+                    config.silence_threshold
+                ),
+                Duration::ZERO,
+            );
             paste(tool, config, wrap_key, "(no sound detected)");
             sleep_secs(0.6);
             delete_n_chars(tool, "(no sound detected)".chars().count());

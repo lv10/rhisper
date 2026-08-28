@@ -218,8 +218,8 @@ cp /usr/share/rhisper/rhisperrc.default \
 | `non-ascii-initial-delay` | `0.15` | Seconds to wait before pasting the first non-ASCII clipboard chunk — increase if the first character is wrong |
 | `non-ascii-default-delay` | `0.025` | Seconds to wait before subsequent non-ASCII clipboard chunks |
 | `keyboard-layout` | `us` | Keyboard layout used when typing ASCII characters (`us`, `dk`, or `es`) — see [Keyboard layout for typed symbols](#usage) |
-| `silence-threshold` | `-50` | Max volume in dB to consider a recording silent (e.g. `-50` means anything quieter is discarded) |
-| `silence-percentage` | `95` | Percentage of the recording that must be below `silence-threshold` to be considered silent |
+| `silence-threshold` | `-50` | Max volume in dB below which audio counts as quiet (e.g. `-50` means anything quieter is discarded) |
+| `min-speech-seconds` | `0.3` | Minimum contiguous stretch of audio above `silence-threshold` required anywhere in the recording to count as real speech, regardless of how long you pause before/after |
 
 ## Troubleshooting
 
