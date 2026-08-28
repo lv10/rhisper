@@ -9,25 +9,37 @@
 use std::env;
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(target_os = "linux")]
+use std::path::PathBuf;
+#[cfg(target_os = "linux")]
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 use clap::Parser;
 
 use rhisper_core::config::{self, Config, PasteMode};
-use rhisper_core::ipc::{Command as ToolCommand, ToolClient};
+use rhisper_core::input::{Injector, ModifierKey};
+#[cfg(target_os = "linux")]
+use rhisper_core::paste;
 use rhisper_core::provider::{self, ProviderError, TranscriptionRequest};
-use rhisper_core::{audio, clipboard, paste, silence};
+use rhisper_core::{audio, clipboard, silence};
 
 const LOGFILE: &str = "/tmp/rhisper.log";
+#[cfg(target_os = "linux")]
 const DAEMON_LAYOUT_FILE: &str = "/tmp/rhispertoold.layout";
+#[cfg(target_os = "linux")]
 const DAEMON_LOG_FILE: &str = "/tmp/rhispertoold.log";
 
 #[derive(Parser, Debug)]
-#[command(name = "rhisper", version, about = "Dictation at cursor for Linux")]
+#[command(
+    name = "rhisper",
+    version,
+    about = "Dictation at cursor for Linux and macOS"
+)]
 struct Args {
-    /// Use rhispertool/rhispertoold from this binary's directory instead of $PATH
+    /// Use rhispertool/rhispertoold from this binary's directory instead of $PATH (Linux only)
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     #[arg(long)]
     local: bool,
 
@@ -87,17 +99,6 @@ fn main() -> std::process::ExitCode {
         }
     };
 
-    let rhispertool = tool_path("rhispertool", args.local);
-    let rhispertoold = tool_path("rhispertoold", args.local);
-
-    if !binary_exists(&rhispertool) {
-        eprintln!("Error: rhispertool not found");
-        eprintln!("Please either:");
-        eprintln!("  - Install the rhisper package for your distro");
-        eprintln!("  - Run 'rhisper --local' from the build directory");
-        return std::process::ExitCode::FAILURE;
-    }
-
     let config = match config::load_or_bootstrap() {
         Ok(c) => c,
         Err(e) => {
@@ -106,29 +107,72 @@ fn main() -> std::process::ExitCode {
         }
     };
 
-    if let Err(e) = ensure_daemon_running(&config.keyboard_layout, &rhispertoold) {
-        eprintln!("Error: Failed to start rhispertoold daemon: {e}");
-        eprintln!("Check {DAEMON_LOG_FILE} for details");
-        return std::process::ExitCode::FAILURE;
-    }
-
-    let tool = match ToolClient::connect() {
-        Ok(t) => t,
-        Err(e) => {
-            eprintln!("failed to connect to rhispertoold: {e}");
+    let mut injector = match build_injector(&config, &args) {
+        Ok(i) => i,
+        Err(msg) => {
+            eprintln!("{msg}");
             return std::process::ExitCode::FAILURE;
         }
     };
 
-    run_toggle(&tool, &config, wrap_key);
+    run_toggle(&mut *injector, &config, wrap_key);
     std::process::ExitCode::SUCCESS
 }
 
-fn run_toggle(tool: &ToolClient, config: &Config, wrap_key: Option<ToolCommand>) {
+/// Connects to (starting if necessary) the uinput daemon and wraps it as an
+/// Injector. Linux only - see build_injector's macOS counterpart below,
+/// which needs no daemon at all.
+#[cfg(target_os = "linux")]
+fn build_injector(config: &Config, args: &Args) -> Result<Box<dyn Injector>, String> {
+    use rhisper_core::input::linux::LinuxInjector;
+    use rhisper_core::ipc::ToolClient;
+
+    let rhispertool = tool_path("rhispertool", args.local);
+    let rhispertoold = tool_path("rhispertoold", args.local);
+
+    if !binary_exists(&rhispertool) {
+        return Err(concat!(
+            "Error: rhispertool not found\n",
+            "Please either:\n",
+            "  - Install the rhisper package for your distro\n",
+            "  - Run 'rhisper --local' from the build directory"
+        )
+        .to_string());
+    }
+
+    ensure_daemon_running(&config.keyboard_layout, &rhispertoold).map_err(|e| {
+        format!(
+            "Error: Failed to start rhispertoold daemon: {e}\nCheck {DAEMON_LOG_FILE} for details"
+        )
+    })?;
+
+    let tool =
+        ToolClient::connect().map_err(|e| format!("failed to connect to rhispertoold: {e}"))?;
+    Ok(Box::new(LinuxInjector(tool)))
+}
+
+/// Posts CGEvents directly, in-process - no daemon needed, since CGEventPost
+/// has no persistent-device registration cost to amortize.
+#[cfg(target_os = "macos")]
+fn build_injector(_config: &Config, _args: &Args) -> Result<Box<dyn Injector>, String> {
+    use macos_accessibility_client::accessibility;
+    use rhisper_core::input::macos::CgInjector;
+
+    if !accessibility::application_is_trusted() {
+        eprintln!("Warning: rhisper does not have Accessibility permission yet.");
+        eprintln!(
+            "Run 'rhisper --setup' or grant it in System Settings > Privacy & Security > Accessibility."
+        );
+    }
+
+    CgInjector::new().map(|i| Box::new(i) as Box<dyn Injector>)
+}
+
+fn run_toggle(injector: &mut dyn Injector, config: &Config, wrap_key: Option<ModifierKey>) {
     if let Some(pid) = audio::running_pid() {
         audio::stop_recording(pid);
         sleep_secs(0.2); // buffer for flush
-        delete_n_chars(tool, "(recording...)".chars().count());
+        delete_n_chars(injector, "(recording...)".chars().count());
 
         let report = silence::analyze(
             audio::RECORDING_PATH,
@@ -146,22 +190,22 @@ fn run_toggle(tool: &ToolClient, config: &Config, wrap_key: Option<ToolCommand>)
                 ),
                 Duration::ZERO,
             );
-            paste(tool, config, wrap_key, "(no sound detected)");
+            paste(injector, config, wrap_key, "(no sound detected)");
             sleep_secs(0.6);
-            delete_n_chars(tool, "(no sound detected)".chars().count());
+            delete_n_chars(injector, "(no sound detected)".chars().count());
             audio::remove_recording();
             return;
         }
 
-        paste(tool, config, wrap_key, "(transcribing...)");
+        paste(injector, config, wrap_key, "(transcribing...)");
         let started = Instant::now();
         let text_result = transcribe(config, audio::RECORDING_PATH);
-        delete_n_chars(tool, "(transcribing...)".chars().count());
+        delete_n_chars(injector, "(transcribing...)".chars().count());
 
         match text_result {
             Ok(text) => {
                 log_event("Transcription", &text, started.elapsed());
-                paste(tool, config, wrap_key, &text);
+                paste(injector, config, wrap_key, &text);
             }
             Err(detail) => {
                 log_event(
@@ -170,23 +214,23 @@ fn run_toggle(tool: &ToolClient, config: &Config, wrap_key: Option<ToolCommand>)
                     started.elapsed(),
                 );
                 let placeholder = "(transcription failed - see rhisper --log)";
-                paste(tool, config, wrap_key, placeholder);
+                paste(injector, config, wrap_key, placeholder);
                 sleep_secs(0.6);
-                delete_n_chars(tool, placeholder.chars().count());
+                delete_n_chars(injector, placeholder.chars().count());
             }
         }
 
         audio::remove_recording();
     } else {
         sleep_secs(0.2);
-        paste(tool, config, wrap_key, "(recording...)");
+        paste(injector, config, wrap_key, "(recording...)");
         match audio::start_recording() {
             Ok(mut child) => {
-                // Blocks until a later "stop" invocation kills pw-record.
+                // Blocks until a later "stop" invocation kills the recorder.
                 let _ = child.wait();
             }
             Err(e) => {
-                eprintln!("Error: failed to start pw-record: {e}");
+                eprintln!("Error: failed to start recording: {e}");
             }
         }
     }
@@ -218,10 +262,12 @@ fn transcribe(config: &Config, recording: &str) -> Result<String, String> {
     })
 }
 
-/// Dispatches on paste-mode, typing ASCII chars directly (layout-sensitive)
-/// and batching non-ASCII runs through the clipboard, restoring the user's
-/// prior clipboard content afterward.
-fn paste(tool: &ToolClient, config: &Config, wrap_key: Option<ToolCommand>, text: &str) {
+/// Dispatches on paste-mode. On Linux, Type mode types ASCII chars directly
+/// (layout-sensitive) and batches non-ASCII runs through the clipboard,
+/// restoring the user's prior clipboard content afterward. On macOS, Type
+/// mode types the whole string in one shot via Unicode injection (see
+/// Injector::type_text) and never touches the clipboard at all.
+fn paste(injector: &mut dyn Injector, config: &Config, wrap_key: Option<ModifierKey>, text: &str) {
     match config.paste_mode {
         PasteMode::Clipboard | PasteMode::ClipboardRestore => {
             let restore = config.paste_mode == PasteMode::ClipboardRestore;
@@ -229,18 +275,29 @@ fn paste(tool: &ToolClient, config: &Config, wrap_key: Option<ToolCommand>, text
 
             clipboard::set_text(text.to_string());
             sleep_secs(config.non_ascii_initial_delay);
-            let _ = tool.paste();
+            injector.paste_shortcut();
 
             if let Some(old) = old {
                 sleep_secs(config.non_ascii_initial_delay);
                 clipboard::set_text(old);
             }
         }
+        #[cfg(target_os = "macos")]
+        PasteMode::Type => {
+            if let Some(key) = wrap_key {
+                injector.press_modifier(key);
+            }
+            injector.type_text(text);
+            if let Some(key) = wrap_key {
+                injector.press_modifier(key);
+            }
+        }
+        #[cfg(target_os = "linux")]
         PasteMode::Type => {
             let saved_clipboard = clipboard::get_text();
 
             if let Some(key) = wrap_key {
-                let _ = tool.press(key);
+                injector.press_modifier(key);
             }
 
             let mut clipboard_modified = false;
@@ -248,7 +305,7 @@ fn paste(tool: &ToolClient, config: &Config, wrap_key: Option<ToolCommand>, text
             for chunk in paste::chunk_for_typing(text) {
                 match chunk {
                     paste::Chunk::Ascii(c) => {
-                        let _ = tool.type_char(c);
+                        injector.type_ascii_char(c);
                     }
                     paste::Chunk::NonAscii(s) => {
                         clipboard::set_text(s);
@@ -259,13 +316,13 @@ fn paste(tool: &ToolClient, config: &Config, wrap_key: Option<ToolCommand>, text
                             config.non_ascii_default_delay
                         });
                         first_chunk = false;
-                        let _ = tool.paste();
+                        injector.paste_shortcut();
                     }
                 }
             }
 
             if let Some(key) = wrap_key {
-                let _ = tool.press(key);
+                injector.press_modifier(key);
             }
 
             if clipboard_modified {
@@ -275,9 +332,9 @@ fn paste(tool: &ToolClient, config: &Config, wrap_key: Option<ToolCommand>, text
     }
 }
 
-fn delete_n_chars(tool: &ToolClient, n: usize) {
+fn delete_n_chars(injector: &mut dyn Injector, n: usize) {
     for _ in 0..n {
-        let _ = tool.backspace();
+        injector.backspace();
     }
 }
 
@@ -301,18 +358,18 @@ fn print_file_or_notice(path: &Path) -> std::process::ExitCode {
     std::process::ExitCode::SUCCESS
 }
 
-fn resolve_wrap_key(args: &Args) -> Result<Option<ToolCommand>, String> {
+fn resolve_wrap_key(args: &Args) -> Result<Option<ModifierKey>, String> {
     let flags = [
-        (args.leftalt, ToolCommand::LeftAlt),
-        (args.rightalt, ToolCommand::RightAlt),
-        (args.leftctrl, ToolCommand::LeftCtrl),
-        (args.rightctrl, ToolCommand::RightCtrl),
-        (args.leftshift, ToolCommand::LeftShift),
-        (args.rightshift, ToolCommand::RightShift),
-        (args.super_key, ToolCommand::Super),
+        (args.leftalt, ModifierKey::LeftAlt),
+        (args.rightalt, ModifierKey::RightAlt),
+        (args.leftctrl, ModifierKey::LeftCtrl),
+        (args.rightctrl, ModifierKey::RightCtrl),
+        (args.leftshift, ModifierKey::LeftShift),
+        (args.rightshift, ModifierKey::RightShift),
+        (args.super_key, ModifierKey::Super),
     ];
 
-    let set: Vec<ToolCommand> = flags
+    let set: Vec<ModifierKey> = flags
         .iter()
         .filter(|(on, _)| *on)
         .map(|(_, c)| *c)
@@ -324,6 +381,7 @@ fn resolve_wrap_key(args: &Args) -> Result<Option<ToolCommand>, String> {
     }
 }
 
+#[cfg(target_os = "linux")]
 fn tool_dir(local: bool) -> Option<PathBuf> {
     if !local {
         return None;
@@ -333,6 +391,7 @@ fn tool_dir(local: bool) -> Option<PathBuf> {
         .and_then(|p| p.parent().map(|d| d.to_path_buf()))
 }
 
+#[cfg(target_os = "linux")]
 fn tool_path(name: &str, local: bool) -> String {
     match tool_dir(local) {
         Some(dir) => dir.join(name).to_string_lossy().into_owned(),
@@ -356,6 +415,7 @@ fn binary_exists(path_or_name: &str) -> bool {
 /// Auto-starts the daemon if it isn't running, and restarts it if its
 /// persisted keyboard layout doesn't match the current config (the daemon
 /// only reads RHISPER_LAYOUT once, at startup).
+#[cfg(target_os = "linux")]
 fn ensure_daemon_running(layout: &str, rhispertoold: &str) -> io::Result<()> {
     if daemon_alive() {
         let running_layout = fs::read_to_string(DAEMON_LAYOUT_FILE)
@@ -387,6 +447,7 @@ fn ensure_daemon_running(layout: &str, rhispertoold: &str) -> io::Result<()> {
     Ok(())
 }
 
+#[cfg(target_os = "linux")]
 fn daemon_alive() -> bool {
     Command::new("pgrep")
         .args(["-x", "rhispertoold"])
@@ -396,8 +457,9 @@ fn daemon_alive() -> bool {
 }
 
 /// Interactive first-time setup: creates a default config if missing,
-/// checks /dev/uinput access and runtime dependencies, and optionally
-/// prompts for a Groq API key. Replaces configure.sh; unlike it, ordinary
+/// checks platform permissions (uinput access on Linux, Accessibility on
+/// macOS) and runtime dependencies, and optionally prompts for a Groq API
+/// key. Replaces configure.sh; unlike it, ordinary
 /// `rhisper` invocations never require this to have been run first (see
 /// config::load_or_bootstrap's non-interactive template bootstrap).
 fn run_setup() -> io::Result<()> {
@@ -410,17 +472,9 @@ fn run_setup() -> io::Result<()> {
         println!("Config already exists at {}", config_path.display());
     }
 
-    let uinput = Path::new("/dev/uinput");
-    if !uinput.exists() {
-        println!("Warning: /dev/uinput not found. Try: sudo modprobe uinput");
-    } else if OpenOptions::new().write(true).open(uinput).is_err() {
-        println!("Warning: /dev/uinput is not writable by your user.");
-        println!("Run: sudo usermod -aG input $USER   (then log out and back in)");
-    } else {
-        println!("/dev/uinput is writable.");
-    }
+    check_platform_permissions();
 
-    let missing_deps: Vec<&str> = ["pw-record", "ffprobe", "ffmpeg"]
+    let missing_deps: Vec<&str> = REQUIRED_DEPS
         .into_iter()
         .filter(|d| !binary_exists(d))
         .collect();
@@ -447,6 +501,38 @@ fn run_setup() -> io::Result<()> {
 
     println!("Configuration complete. Run 'rhisper' to start dictating.");
     Ok(())
+}
+
+#[cfg(target_os = "linux")]
+const REQUIRED_DEPS: [&str; 3] = ["pw-record", "ffprobe", "ffmpeg"];
+#[cfg(target_os = "macos")]
+const REQUIRED_DEPS: [&str; 3] = ["rec", "ffprobe", "ffmpeg"];
+
+#[cfg(target_os = "linux")]
+fn check_platform_permissions() {
+    let uinput = Path::new("/dev/uinput");
+    if !uinput.exists() {
+        println!("Warning: /dev/uinput not found. Try: sudo modprobe uinput");
+    } else if OpenOptions::new().write(true).open(uinput).is_err() {
+        println!("Warning: /dev/uinput is not writable by your user.");
+        println!("Run: sudo usermod -aG input $USER   (then log out and back in)");
+    } else {
+        println!("/dev/uinput is writable.");
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn check_platform_permissions() {
+    use macos_accessibility_client::accessibility;
+
+    if accessibility::application_is_trusted() {
+        println!("Accessibility permission already granted.");
+    } else {
+        println!("rhisper needs Accessibility permission to type at your cursor.");
+        println!("Requesting it now - approve the system prompt, or grant it later in");
+        println!("System Settings > Privacy & Security > Accessibility.");
+        accessibility::application_is_trusted_with_prompt();
+    }
 }
 
 /// Loads `~/.env` (KEY=VALUE per line) into the process environment, for

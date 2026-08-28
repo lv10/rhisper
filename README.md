@@ -7,13 +7,13 @@
   <br><br>
 </div>
 
-Dictation at cursor for Linux. A Rust rewrite based on the original [xhisper](https://github.com/imaginalnika/xhisper) project.
+Dictation at cursor for Linux and macOS. A Rust rewrite based on the original [xhisper](https://github.com/imaginalnika/xhisper) project.
 
 ## Installation
 
 ### Runtime dependencies
 
-rhisper only needs `pipewire` (for `pw-record`) and `ffmpeg` at runtime — everything else (HTTP, JSON, clipboard) is built into the binary.
+On Linux, rhisper needs `pipewire` (for `pw-record`) and `ffmpeg` at runtime. On macOS, it needs `sox` (for `rec`) and `ffmpeg`. Everything else (HTTP, JSON, clipboard) is built into the binary.
 
 <details>
 <summary>Arch Linux / Manjaro</summary>
@@ -31,6 +31,12 @@ sudo apt install pipewire ffmpeg</code></pre>
 Fedora's base repos don't ship <code>ffmpeg</code> (licensing) — enable <a href="https://rpmfusion.org/Configuration">RPM Fusion</a> first:
 <pre><code>sudo dnf install -y https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm
 sudo dnf install -y pipewire-utils ffmpeg</code></pre>
+</details>
+
+<details>
+<summary>macOS</summary>
+<pre><code>brew install sox ffmpeg</code></pre>
+rhisper also needs Accessibility permission to type at your cursor (System Settings → Privacy & Security → Accessibility) and Microphone permission for <code>rec</code> to capture audio — <code>rhisper --setup</code> checks and prompts for these.
 </details>
 
 ### Install the package
@@ -61,13 +67,20 @@ Download the <code>.rpm</code> from the <a href="https://github.com/lv10/rhisper
 </details>
 
 <details>
+<summary>macOS (Homebrew)</summary>
+<pre><code>brew tap lv10/rhisper
+brew install rhisper</code></pre>
+</details>
+
+<details>
 <summary>cargo (any distro with Rust installed)</summary>
 <pre><code>cargo install rhisper</code></pre>
-<code>cargo install</code> only builds and places the two binaries on your <code>$PATH</code> — it has no post-install hook, so it can't install the udev rule the .deb/.rpm/AUR packages ship. Without it, the daemon can't open <code>/dev/uinput</code> unless you're already in the <code>input</code> group. After installing, either run:
+On Linux, <code>cargo install</code> only builds and places the two binaries on your <code>$PATH</code> — it has no post-install hook, so it can't install the udev rule the .deb/.rpm/AUR packages ship. Without it, the daemon can't open <code>/dev/uinput</code> unless you're already in the <code>input</code> group. After installing, either run:
 <pre><code>sudo usermod -aG input $USER   # then log out and back in</code></pre>
 or install the udev rule yourself:
 <pre><code>curl -sL https://raw.githubusercontent.com/lv10/rhisper/main/packaging/rhisper-uinput.rules | sudo tee /usr/lib/udev/rules.d/60-rhisper-uinput.rules
 sudo udevadm control --reload-rules && sudo udevadm trigger --subsystem-match=misc --attr-match=name=uinput</code></pre>
+On macOS there's no daemon/udev rule at all — just grant Accessibility and Microphone permission (<code>rhisper --setup</code> checks and prompts for these).
 </details>
 
 <details>
@@ -76,14 +89,15 @@ Requires the Rust toolchain (<a href="https://rustup.rs">rustup.rs</a>) and <cod
 <pre><code>git clone --depth 1 https://github.com/lv10/rhisper.git
 cd rhisper
 cargo build --release
-sudo install -Dm755 target/release/rhisper /usr/local/bin/rhisper
-sudo install -Dm755 target/release/rhispertool /usr/local/bin/rhispertool
+sudo install -Dm755 target/release/rhisper /usr/local/bin/rhisper</code></pre>
+On Linux, also install the uinput daemon/client binary and its udev rule (macOS has no equivalent — <code>rhispertool</code> is a Linux-only stub there, see <a href="#usage">Usage</a>):
+<pre><code>sudo install -Dm755 target/release/rhispertool /usr/local/bin/rhispertool
 sudo ln -sf rhispertool /usr/local/bin/rhispertoold
 sudo install -Dm644 packaging/rhisper-uinput.rules /usr/lib/udev/rules.d/60-rhisper-uinput.rules
 sudo udevadm control --reload-rules && sudo udevadm trigger --subsystem-match=misc --attr-match=name=uinput</code></pre>
 </details>
 
-Packages install a udev rule granting access to `/dev/uinput` automatically — no group membership change or re-login needed. If you built from source without the udev rule (or on a system without udev-tag-aware session management), fall back to:
+Linux packages install a udev rule granting access to `/dev/uinput` automatically — no group membership change or re-login needed. If you built from source without the udev rule (or on a system without udev-tag-aware session management), fall back to:
 ```sh
 sudo usermod -aG input $USER
 ```
@@ -95,7 +109,7 @@ then **log out and log back in** (restart is safer) for the group change to take
 ```sh
 GROQ_API_KEY=<your_API_key>
 ```
-(Or run `rhisper --setup` for an interactive prompt plus a `/dev/uinput`/dependency check.)
+(Or run `rhisper --setup` for an interactive prompt plus a platform permission/dependency check — `/dev/uinput` on Linux, Accessibility on macOS.)
 
 2. Bind `rhisper` binary to your favorite key:
 
@@ -137,6 +151,25 @@ bind = $mainMod, D, exec, rhisper
 </details>
 
 <details>
+<summary>macOS (skhd)</summary>
+
+macOS has no bundled hotkey daemon; <a href="https://github.com/koekeishiya/skhd">skhd</a> is the closest widely-used equivalent (also needs Accessibility permission, granted separately from rhisper's own):
+
+```sh
+brew install skhd
+```
+
+```
+# ~/.config/skhd/skhdrc
+cmd + shift - d : rhisper
+```
+
+```sh
+skhd --start-service
+```
+</details>
+
+<details>
 <summary>Gnome</summary>
 
 ```sh
@@ -172,18 +205,18 @@ The transcription will be typed at your cursor position.
 rhisper --log
 ```
 
-**Non-QWERTY layouts:**
+**Non-QWERTY layouts (Linux only):**
 
-For non-QWERTY layouts (e.g. Dvorak, International), set up an input switch key to QWERTY (e.g. rightalt). Then instead of binding to `rhisper`, bind to:
+Linux types by simulating physical key positions, so a non-QWERTY layout (e.g. Dvorak, International) needs an input switch key to QWERTY (e.g. rightalt) set up first. Then instead of binding to `rhisper`, bind to:
 ```sh
 rhisper --<your-input-switch-key>
 ```
 
-**Available input switch keys:** `--leftalt`, `--rightalt`, `--leftctrl`, `--rightctrl`, `--leftshift`, `--rightshift`, `--super`
+**Available input switch keys:** `--leftalt`, `--rightalt`, `--leftctrl`, `--rightctrl`, `--leftshift`, `--rightshift`, `--super` (on macOS, `--super` wraps with Cmd instead — there's no physical Super/Windows key)
 
-Key chords (like ctrl-space) not available yet.
+Key chords (like ctrl-space) not available yet. macOS doesn't need any of this: it types via direct Unicode injection regardless of the active keyboard layout, so there's nothing to switch.
 
-**Keyboard layout for typed symbols:**
+**Keyboard layout for typed symbols (Linux only):**
 
 ASCII letters and digits are typed by physical key position, but punctuation symbols differ between layouts. If you use a Danish or Spanish keyboard layout and get wrong characters (e.g. on Danish, `'` comes out as `ø`; on Spanish, `~` comes out as `ª`), set the layout in `~/.config/rhisper/rhisperrc`:
 
@@ -191,7 +224,7 @@ ASCII letters and digits are typed by physical key position, but punctuation sym
 keyboard-layout : dk
 ```
 
-Supported layouts: `us`, `dk`, `es`. The layout is read by the daemon at startup; the daemon is restarted automatically when the setting changes.
+Supported layouts: `us`, `dk`, `es`. The layout is read by the daemon at startup; the daemon is restarted automatically when the setting changes. Ignored on macOS (see above).
 
 ---
 
@@ -217,7 +250,7 @@ cp /usr/share/rhisper/rhisperrc.default \
 | `paste-mode` | `type` | `type` (layout-sensitive, keeps clipboard), `clipboard` (always paste via clipboard, overwrites clipboard), or `clipboard-restore` (like `clipboard`, but saves and restores previous clipboard content) |
 | `non-ascii-initial-delay` | `0.15` | Seconds to wait before pasting the first non-ASCII clipboard chunk — increase if the first character is wrong |
 | `non-ascii-default-delay` | `0.025` | Seconds to wait before subsequent non-ASCII clipboard chunks |
-| `keyboard-layout` | `us` | Keyboard layout used when typing ASCII characters (`us`, `dk`, or `es`) — see [Keyboard layout for typed symbols](#usage) |
+| `keyboard-layout` | `us` | **Linux only.** Keyboard layout used when typing ASCII characters (`us`, `dk`, or `es`) — see [Keyboard layout for typed symbols](#usage). Ignored on macOS, which types via direct Unicode injection |
 | `silence-threshold` | `-50` | Max volume in dB below which audio counts as quiet (e.g. `-50` means anything quieter is discarded) |
 | `min-speech-seconds` | `0.3` | Minimum contiguous stretch of audio above `silence-threshold` required anywhere in the recording to count as real speech, regardless of how long you pause before/after |
 
@@ -241,7 +274,7 @@ cargo test
 
 This runs unit tests (keymap tables for every supported layout, the IPC protocol, ASCII/Unicode paste-chunking, silence-detection parsing, config parsing) plus integration tests for the transcription provider against a local mock HTTP server (`tests/provider_test.rs`).
 
-Every push and pull request against `main` runs `cargo build`, `cargo test`, `cargo clippy -- -D warnings`, and `cargo fmt --check` in CI (see `.github/workflows/ci.yml`). Tagged releases (`v*`) additionally build and publish `.deb`/`.rpm`/AUR-source packages via `.github/workflows/release.yml`.
+Every push and pull request against `main` runs `cargo build`, `cargo test`, `cargo clippy -- -D warnings`, and `cargo fmt --check` on both Linux and macOS runners in CI (see `.github/workflows/ci.yml`). Tagged releases (`v*`) additionally build and publish `.deb`/`.rpm`/AUR-source/Homebrew-formula packages via `.github/workflows/release.yml`.
 
 ---
 

@@ -1,18 +1,38 @@
 // rhispertool - combined daemon and client for text input via uinput.
 // Mode is selected by argv[0] (the "rhispertoold" symlink installed by
 // packaging triggers daemon mode) or an explicit `--daemon` flag.
+//
+// Linux-only: this binary exists because uinput requires a persistent
+// virtual device owned by a long-lived daemon (see src/input/mod.rs's
+// module comment for why). Other platforms get a stub main() below since
+// Cargo has no declarative way to exclude a [[bin]] target per platform.
 
+#[cfg(not(target_os = "linux"))]
+fn main() -> std::process::ExitCode {
+    eprintln!("rhispertool is Linux-only and is not used on this platform.");
+    std::process::ExitCode::FAILURE
+}
+
+#[cfg(target_os = "linux")]
 use std::env;
+#[cfg(target_os = "linux")]
 use std::fs;
+#[cfg(target_os = "linux")]
 use std::io::Write;
+#[cfg(target_os = "linux")]
 use std::path::Path;
+#[cfg(target_os = "linux")]
 use std::process::ExitCode;
 
+#[cfg(target_os = "linux")]
 use rhisper_core::input::uinput::{self, RhisperDevice};
+#[cfg(target_os = "linux")]
 use rhisper_core::ipc::{self, Command};
 
+#[cfg(target_os = "linux")]
 const LAYOUT_FILE: &str = "/tmp/rhispertoold.layout";
 
+#[cfg(target_os = "linux")]
 fn main() -> ExitCode {
     let args: Vec<String> = env::args().collect();
     let prog = args
@@ -33,6 +53,7 @@ fn main() -> ExitCode {
     }
 }
 
+#[cfg(target_os = "linux")]
 fn run_daemon() -> ExitCode {
     let mut device = match RhisperDevice::create() {
         Ok(d) => d,
@@ -94,6 +115,7 @@ fn run_daemon() -> ExitCode {
     }
 }
 
+#[cfg(target_os = "linux")]
 fn show_usage() {
     eprintln!(
         "Usage:\n\
@@ -115,6 +137,7 @@ fn show_usage() {
     );
 }
 
+#[cfg(target_os = "linux")]
 fn run_client(args: &[String]) -> ExitCode {
     if args.len() < 2 {
         show_usage();

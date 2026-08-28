@@ -29,9 +29,11 @@ paste-mode               : "type"
 non-ascii-initial-delay : 0.15 # Increase this if first character comes out wrong.
 non-ascii-default-delay : 0.025
 
-# Keyboard Layout:
+# Keyboard Layout (Linux only):
 # Layout used when typing ASCII characters (us | dk | es).
 # The daemon is restarted automatically when this changes.
+# Ignored on macOS, which types via direct Unicode injection regardless of
+# the active keyboard layout.
 keyboard-layout : us
 
 # Silence Detection:

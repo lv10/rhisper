@@ -1,6 +1,6 @@
-// audio.rs - pw-record process management for the record/stop toggle.
+// audio.rs - recorder process management for the record/stop toggle.
 //
-// Recording state is tracked by the pw-record child's PID in a small file
+// Recording state is tracked by the recorder child's PID in a small file
 // written when recording starts, rather than pattern-matching the process
 // table (which could be confused by an unrelated process that happens to
 // mention the same path on its command line). The PID is checked for
@@ -12,6 +12,46 @@ use std::process::{Child, Command, Stdio};
 
 pub const RECORDING_PATH: &str = "/tmp/rhisper.wav";
 const PID_FILE: &str = "/tmp/rhisper.pid";
+
+#[cfg(target_os = "linux")]
+fn record_command() -> Command {
+    let mut cmd = Command::new("pw-record");
+    cmd.args(["--channels=1", "--rate=16000", RECORDING_PATH]);
+    cmd
+}
+
+// sox's `rec` grabs the system default input device with no numeric
+// device-index guessing, unlike `ffmpeg -f avfoundation` (whose index can
+// shift depending on what's plugged in).
+#[cfg(target_os = "macos")]
+fn record_command() -> Command {
+    let mut cmd = Command::new("rec");
+    cmd.args([
+        "-q",
+        "-c",
+        "1",
+        "-r",
+        "16000",
+        "-b",
+        "16",
+        "-e",
+        "signed-integer",
+        RECORDING_PATH,
+    ]);
+    cmd
+}
+
+#[cfg(target_os = "linux")]
+fn stop_signal() -> i32 {
+    libc::SIGTERM
+}
+
+// sox finalizes the WAV header on SIGINT, not SIGTERM - unconfirmed on real
+// hardware (no Mac available this session), flagged for follow-up.
+#[cfg(target_os = "macos")]
+fn stop_signal() -> i32 {
+    libc::SIGINT
+}
 
 /// Returns the PID of rhisper's own in-progress recording, if any. A PID
 /// file whose process is no longer alive is treated as stale and removed.
@@ -28,13 +68,13 @@ pub fn running_pid() -> Option<i32> {
     }
 }
 
-/// Starts `pw-record` as a foreground child (the caller is expected to
-/// `.wait()` on it, exactly mirroring the original script's behavior of
-/// blocking the "start" invocation until a later "stop" invocation kills
-/// the recording), and persists its PID for that later invocation to find.
+/// Starts the platform recorder as a foreground child (the caller is
+/// expected to `.wait()` on it, exactly mirroring the original script's
+/// behavior of blocking the "start" invocation until a later "stop"
+/// invocation kills the recording), and persists its PID for that later
+/// invocation to find.
 pub fn start_recording() -> io::Result<Child> {
-    let child = Command::new("pw-record")
-        .args(["--channels=1", "--rate=16000", RECORDING_PATH])
+    let child = record_command()
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()?;
@@ -46,7 +86,7 @@ pub fn start_recording() -> io::Result<Child> {
 /// Stops an in-progress recording by PID (found via running_pid()).
 pub fn stop_recording(pid: i32) {
     unsafe {
-        libc::kill(pid, libc::SIGTERM);
+        libc::kill(pid, stop_signal());
     }
     let _ = fs::remove_file(PID_FILE);
 }

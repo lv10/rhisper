@@ -7,16 +7,24 @@
 // auto-daemonizing behavior - SetExtLinux::wait_until() must be used
 // explicitly to keep serving requests for a short window from a background
 // thread. This is the one area of the rewrite most worth extra manual
-// Wayland testing (see the project plan).
+// Wayland testing (see the project plan). macOS's NSPasteboard is
+// system-owned with no such serving-thread requirement, so its set_text is
+// synchronous - see the platform-specific bodies below.
 
+use arboard::Clipboard;
+
+#[cfg(target_os = "linux")]
 use std::thread;
+#[cfg(target_os = "linux")]
 use std::time::{Duration, Instant};
 
-use arboard::{Clipboard, SetExtLinux};
+#[cfg(target_os = "linux")]
+use arboard::SetExtLinux;
 
 /// How long the background thread keeps serving the clipboard content after
 /// a set_text() call, covering the short window between the clipboard write
 /// and the target application's Ctrl+V read.
+#[cfg(target_os = "linux")]
 const SERVE_WINDOW: Duration = Duration::from_secs(2);
 
 /// Reads the current clipboard text, or an empty string if the clipboard is
@@ -32,6 +40,7 @@ pub fn get_text() -> String {
 /// (matching a `wl-copy` process exiting once superseded). Fire-and-forget:
 /// callers still need their own short sleep before triggering the paste
 /// keystroke - see the non-ascii-*-delay config options.
+#[cfg(target_os = "linux")]
 pub fn set_text(text: String) {
     thread::spawn(move || {
         if let Ok(mut clipboard) = Clipboard::new() {
@@ -41,6 +50,16 @@ pub fn set_text(text: String) {
                 .text(text);
         }
     });
+}
+
+/// Sets the clipboard to `text`. NSPasteboard ownership is system-managed
+/// (not tied to a live serving process like Wayland), so this is a plain
+/// synchronous write with no background thread needed.
+#[cfg(target_os = "macos")]
+pub fn set_text(text: String) {
+    if let Ok(mut clipboard) = Clipboard::new() {
+        let _ = clipboard.set().text(text);
+    }
 }
 
 // chunk_for_typing (src/paste.rs) covers the ASCII/Unicode batching logic in

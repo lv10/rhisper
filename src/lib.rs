@@ -2,6 +2,7 @@ pub mod audio;
 pub mod clipboard;
 pub mod config;
 pub mod input;
+#[cfg(target_os = "linux")]
 pub mod ipc;
 pub mod paste;
 pub mod provider;
