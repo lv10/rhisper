@@ -7,7 +7,9 @@
 // works correctly regardless of the active keyboard layout and makes the
 // per-layout keymap tables Linux needs unnecessary here.
 
-use core_graphics::event::{CGEvent, CGEventFlags, CGEventTapLocation, KeyCode as CgKey};
+use core_graphics::event::{
+    CGEvent, CGEventFlags, CGEventTapLocation, CGKeyCode, KeyCode as CgKey,
+};
 use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
 
 use super::{Injector, ModifierKey};
@@ -23,7 +25,7 @@ impl CgInjector {
             .map_err(|_| "failed to create CGEventSource".to_string())
     }
 
-    fn post_key(&self, keycode: CgKey, down: bool, flags: CGEventFlags) {
+    fn post_key(&self, keycode: CGKeyCode, down: bool, flags: CGEventFlags) {
         if let Ok(event) = CGEvent::new_keyboard_event(self.source.clone(), keycode, down) {
             event.set_flags(flags);
             event.post(CGEventTapLocation::HID);
