@@ -14,6 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Check tag matches Cargo.toml version
         run: |
@@ -21,6 +23,14 @@ jobs:
           cargo_version="$(grep -m1 '^version' Cargo.toml | sed -E 's/version = "(.*)"/\1/')"
           if [ "$tag_version" != "$cargo_version" ]; then
             echo "::error::Tag $GITHUB_REF_NAME does not match Cargo.toml version $cargo_version"
+            exit 1
+          fi
+
+      - name: Check the released commit is on main
+        run: |
+          git fetch origin main --quiet
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_SHA (ref $GITHUB_REF_NAME) is not an ancestor of main - refusing to publish a release from a commit that hasn't been merged to main"
             exit 1
           fi
 
