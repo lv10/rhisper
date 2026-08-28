@@ -1,19 +1,19 @@
 <div align="center">
-  <h1>xhisper <i>/ˈzɪspər/</i></h1>
-  <img src="demo.gif" alt="xhisper demo" width="300">
+  <h1>rhisper <i>/ˈrɪspər/</i></h1>
+  <img src="logo.png" alt="rhisper logo" width="300">
   <br><br>
-  <a href="https://github.com/lv10/xhisper/actions/workflows/ci.yml"><img src="https://github.com/lv10/xhisper/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/lv10/rhisper/actions/workflows/ci.yml"><img src="https://github.com/lv10/rhisper/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://buymeacoffee.com/luisvillamg"><img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-donate-ffdd00?logo=buy-me-a-coffee&logoColor=black" alt="Buy me a coffee"></a>
   <br><br>
 </div>
 
-Dictation at cursor for Linux.
+Dictation at cursor for Linux. A Rust rewrite based on the original [xhisper](https://github.com/imaginalnika/xhisper) project.
 
 ## Installation
 
 ### Runtime dependencies
 
-xhisper only needs `pipewire` (for `pw-record`) and `ffmpeg` at runtime — everything else (HTTP, JSON, clipboard) is built into the binary.
+rhisper only needs `pipewire` (for `pw-record`) and `ffmpeg` at runtime — everything else (HTTP, JSON, clipboard) is built into the binary.
 
 <details>
 <summary>Arch Linux / Manjaro</summary>
@@ -37,34 +37,34 @@ sudo dnf install -y pipewire-utils ffmpeg</code></pre>
 
 <details>
 <summary>Arch Linux (AUR)</summary>
-<pre><code>yay -S xhisper</code></pre>
+<pre><code>yay -S rhisper</code></pre>
 or manually from <code>packaging/PKGBUILD</code>:
-<pre><code>git clone --depth 1 https://github.com/lv10/xhisper.git
-cd xhisper/packaging && makepkg -si</code></pre>
+<pre><code>git clone --depth 1 https://github.com/lv10/rhisper.git
+cd rhisper/packaging && makepkg -si</code></pre>
 </details>
 
 <details>
 <summary>Debian / Ubuntu</summary>
-Download the <code>.deb</code> from the <a href="https://github.com/lv10/xhisper/releases">latest release</a>, then:
-<pre><code>sudo apt install ./xhisper_*.deb</code></pre>
+Download the <code>.deb</code> from the <a href="https://github.com/lv10/rhisper/releases">latest release</a>, then:
+<pre><code>sudo apt install ./rhisper_*.deb</code></pre>
 </details>
 
 <details>
 <summary>Fedora / RHEL / AlmaLinux / Rocky</summary>
-Download the <code>.rpm</code> from the <a href="https://github.com/lv10/xhisper/releases">latest release</a>, then:
-<pre><code>sudo dnf install ./xhisper-*.rpm</code></pre>
+Download the <code>.rpm</code> from the <a href="https://github.com/lv10/rhisper/releases">latest release</a>, then:
+<pre><code>sudo dnf install ./rhisper-*.rpm</code></pre>
 </details>
 
 <details>
 <summary>Build from source (any distro)</summary>
 Requires the Rust toolchain (<a href="https://rustup.rs">rustup.rs</a>) and <code>nasm</code> (a build-time dependency of the TLS stack):
-<pre><code>git clone --depth 1 https://github.com/lv10/xhisper.git
-cd xhisper
+<pre><code>git clone --depth 1 https://github.com/lv10/rhisper.git
+cd rhisper
 cargo build --release
-sudo install -Dm755 target/release/xhisper /usr/local/bin/xhisper
-sudo install -Dm755 target/release/xhispertool /usr/local/bin/xhispertool
-sudo ln -sf xhispertool /usr/local/bin/xhispertoold
-sudo install -Dm644 packaging/xhisper-uinput.rules /usr/lib/udev/rules.d/60-xhisper-uinput.rules
+sudo install -Dm755 target/release/rhisper /usr/local/bin/rhisper
+sudo install -Dm755 target/release/rhispertool /usr/local/bin/rhispertool
+sudo ln -sf rhispertool /usr/local/bin/rhispertoold
+sudo install -Dm644 packaging/rhisper-uinput.rules /usr/lib/udev/rules.d/60-rhisper-uinput.rules
 sudo udevadm control --reload-rules && sudo udevadm trigger --subsystem-match=misc --attr-match=name=uinput</code></pre>
 </details>
 
@@ -80,9 +80,9 @@ then **log out and log back in** (restart is safer) for the group change to take
 ```sh
 GROQ_API_KEY=<your_API_key>
 ```
-(Or run `xhisper --setup` for an interactive prompt plus a `/dev/uinput`/dependency check.)
+(Or run `rhisper --setup` for an interactive prompt plus a `/dev/uinput`/dependency check.)
 
-2. Bind `xhisper` binary to your favorite key:
+2. Bind `rhisper` binary to your favorite key:
 
 <details>
 <summary>keyd</summary>
@@ -92,7 +92,7 @@ GROQ_API_KEY=<your_API_key>
 capslock = layer(dictate)
 
 [dictate:C]
-d = macro(xhisper)
+d = macro(rhisper)
 ```
 </details>
 
@@ -101,7 +101,7 @@ d = macro(xhisper)
 
 ```
 super + d
-    xhisper
+    rhisper
 ```
 </details>
 
@@ -109,7 +109,7 @@ super + d
 <summary>i3 / sway</summary>
 
 ```
-bindsym $mod+d exec xhisper
+bindsym $mod+d exec rhisper
 ```
 </details>
 
@@ -117,7 +117,7 @@ bindsym $mod+d exec xhisper
 <summary>Hyprland</summary>
 
 ```
-bind = $mainMod, D, exec, xhisper
+bind = $mainMod, D, exec, rhisper
 ```
 </details>
 
@@ -127,9 +127,9 @@ bind = $mainMod, D, exec, xhisper
 ```sh
 # In your terminal:
 
-name="xhisper"
+name="rhisper"
 binding="<CTRL><SHIFT>X"
-action="/usr/local/bin/xhisper"
+action="/usr/local/bin/rhisper"
 
 media_keys=org.gnome.settings-daemon.plugins.media-keys
 custom_kbd=org.gnome.settings-daemon.plugins.media-keys.custom-keybinding
@@ -146,7 +146,7 @@ gsettings set $custom_kbd:$kbd_path command "$action"
 
 ## Usage
 
-Simply run `xhisper` twice (via your favorite keybinding):
+Simply run `rhisper` twice (via your favorite keybinding):
 - **First run**: Starts recording
 - **Second run**: Stops and transcribes
 
@@ -154,14 +154,14 @@ The transcription will be typed at your cursor position.
 
 **View logs:**
 ```sh
-xhisper --log
+rhisper --log
 ```
 
 **Non-QWERTY layouts:**
 
-For non-QWERTY layouts (e.g. Dvorak, International), set up an input switch key to QWERTY (e.g. rightalt). Then instead of binding to `xhisper`, bind to:
+For non-QWERTY layouts (e.g. Dvorak, International), set up an input switch key to QWERTY (e.g. rightalt). Then instead of binding to `rhisper`, bind to:
 ```sh
-xhisper --<your-input-switch-key>
+rhisper --<your-input-switch-key>
 ```
 
 **Available input switch keys:** `--leftalt`, `--rightalt`, `--leftctrl`, `--rightctrl`, `--leftshift`, `--rightshift`, `--super`
@@ -170,7 +170,7 @@ Key chords (like ctrl-space) not available yet.
 
 **Keyboard layout for typed symbols:**
 
-ASCII letters and digits are typed by physical key position, but punctuation symbols differ between layouts. If you use a Danish or Spanish keyboard layout and get wrong characters (e.g. on Danish, `'` comes out as `ø`; on Spanish, `~` comes out as `ª`), set the layout in `~/.config/xhisper/xhisperrc`:
+ASCII letters and digits are typed by physical key position, but punctuation symbols differ between layouts. If you use a Danish or Spanish keyboard layout and get wrong characters (e.g. on Danish, `'` comes out as `ø`; on Spanish, `~` comes out as `ª`), set the layout in `~/.config/rhisper/rhisperrc`:
 
 ```
 keyboard-layout : dk
@@ -182,18 +182,18 @@ Supported layouts: `us`, `dk`, `es`. The layout is read by the daemon at startup
 
 ## Configuration
 
-Configuration is read from `~/.config/xhisper/xhisperrc`. A default one is created automatically the first time you run `xhisper` — no setup step required.
+Configuration is read from `~/.config/rhisper/rhisperrc`. A default one is created automatically the first time you run `rhisper` — no setup step required.
 
 To view or reset your configuration:
 ```sh
-xhisper --config                                  # print current config
-cp /usr/share/xhisper/xhisperrc.default \
-   ~/.config/xhisper/xhisperrc                    # reset to defaults
+rhisper --config                                  # print current config
+cp /usr/share/rhisper/rhisperrc.default \
+   ~/.config/rhisper/rhisperrc                    # reset to defaults
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `provider` | `groq` | Transcription provider: `groq` (reads `GROQ_API_KEY`), `openai` (reads `OPENAI_API_KEY`), or `custom` (reads `XHISPER_API_KEY`, sends to `api-base-url`) |
+| `provider` | `groq` | Transcription provider: `groq` (reads `GROQ_API_KEY`), `openai` (reads `OPENAI_API_KEY`), or `custom` (reads `RHISPER_API_KEY`, sends to `api-base-url`) |
 | `api-base-url` | _(empty)_ | Base URL for `provider: custom` — any OpenAI-compatible `/audio/transcriptions` endpoint |
 | `model` | _(empty)_ | Overrides the provider's default model (e.g. `whisper-1`, `gpt-4o-transcribe`). Empty = provider default |
 | `long-recording-threshold` | `1000` | Duration in seconds above which Groq's larger `whisper-large-v3` model is used instead of `whisper-large-v3-turbo` |
@@ -212,7 +212,7 @@ cp /usr/share/xhisper/xhisperrc.default \
 
 **Non-ASCII characters come out wrong**: Increase `non-ascii-initial-delay` (and `non-ascii-default-delay`) to give the Wayland compositor more time to process the clipboard update before the paste keystroke arrives.
 
-**Clipboard content is lost after dictation**: This should not happen — xhisper saves and restores your clipboard around any non-ASCII paste operations. If you see this, please open an issue.
+**Clipboard content is lost after dictation**: This should not happen — rhisper saves and restores your clipboard around any non-ASCII paste operations. If you see this, please open an issue.
 
 ---
 

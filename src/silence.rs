@@ -1,14 +1,9 @@
 // silence.rs - silence detection for recorded audio.
 //
-// The original xhisper.sh used `ffmpeg -af volumedetect` to check whether
-// the recording's max volume never exceeded silence-threshold - a
-// whole-clip check that never actually used the documented
-// silence-percentage option (it was parsed into a shell variable and never
-// referenced again). This port uses `ffmpeg -af silencedetect` instead,
-// which reports individual silent intervals, so silence-percentage can
-// finally be applied: a recording only counts as silent once the fraction
-// of its duration spent below silence-threshold reaches silence-percentage.
-// bc is no longer a runtime dependency; all math is in-process.
+// Uses `ffmpeg -af silencedetect`, which reports individual silent
+// intervals, so silence-percentage can be applied precisely: a recording
+// only counts as silent once the fraction of its duration spent below
+// silence-threshold reaches silence-percentage. All math is in-process.
 
 use std::process::Command;
 

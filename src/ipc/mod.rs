@@ -1,20 +1,16 @@
-// ipc.rs - client/daemon transport for xhisper.
+// ipc.rs - client/daemon transport for rhisper.
 //
-// The C implementation used a Linux abstract-namespace Unix datagram socket
-// (`\0xhisper_socket`) so no filesystem entry was ever left behind. Abstract
-// namespace sockets are a Linux-only kernel feature (no macOS/BSD
-// equivalent), so this port uses a normal filesystem-path socket instead,
-// placed under $XDG_RUNTIME_DIR (a per-login tmpfs that's cleared on
-// logout) with a /tmp fallback. This is a deliberate, documented behavior
-// change from the original; the single-byte command protocol itself is
-// unchanged.
+// Uses a normal filesystem-path Unix datagram socket, placed under
+// $XDG_RUNTIME_DIR (a per-login tmpfs that's cleared on logout) with a /tmp
+// fallback. A filesystem-path socket (rather than a Linux-only
+// abstract-namespace one) keeps this portable to other Unix-likes.
 
 use std::env;
 use std::io;
 use std::os::unix::net::UnixDatagram;
 use std::path::PathBuf;
 
-const SOCKET_NAME: &str = "xhisper.sock";
+const SOCKET_NAME: &str = "rhisper.sock";
 
 pub fn socket_path() -> PathBuf {
     if let Ok(dir) = env::var("XDG_RUNTIME_DIR") {
@@ -23,11 +19,11 @@ pub fn socket_path() -> PathBuf {
         }
     }
     let uid = unsafe { libc::getuid() };
-    PathBuf::from(format!("/tmp/xhisper-{uid}.sock"))
+    PathBuf::from(format!("/tmp/rhisper-{uid}.sock"))
 }
 
 /// The single-byte (or two-byte, for `Type`) command protocol spoken over
-/// the socket. Byte values are unchanged from xhispertool.c's dispatch.
+/// the socket between `rhisper` and the `rhispertoold` daemon.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Command {
     Paste,
@@ -114,9 +110,9 @@ pub fn connect_client() -> io::Result<UnixDatagram> {
     Ok(socket)
 }
 
-/// A connected client, kept open for a whole `xhisper` invocation instead
+/// A connected client, kept open for a whole `rhisper` invocation instead
 /// of reconnecting per command (the original C client connected fresh for
-/// every single `xhispertool` subprocess call).
+/// every single `rhispertool` subprocess call).
 pub struct ToolClient(UnixDatagram);
 
 impl ToolClient {

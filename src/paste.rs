@@ -1,11 +1,11 @@
-// paste.rs - pure text-chunking logic extracted from xhisper.sh's paste().
+// paste.rs - pure text-chunking logic for the paste() dispatcher.
 //
 // Splits text into a sequence of chunks: single printable-ASCII characters
 // (typed directly via the uinput daemon, layout-sensitive) and runs of
 // non-ASCII characters (batched into one clipboard write + one Ctrl+V paste
 // each, to minimize clipboard churn and avoid Wayland async race
-// conditions). This mirrors the char-by-char loop in xhisper.sh exactly,
-// but as a pure function with no I/O so it's unit-testable in isolation.
+// conditions). Kept as a pure function with no I/O so it's unit-testable in
+// isolation.
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Chunk {

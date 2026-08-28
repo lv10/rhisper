@@ -1,21 +1,19 @@
 // audio.rs - pw-record process management for the record/stop toggle.
 //
-// The original xhisper.sh detects an in-progress recording by pattern
-// matching `pgrep -f "pw-record.*$RECORDING"` against the whole system
-// process table. This port instead tracks the pw-record child's PID in a
-// small file written when recording starts, which can't be confused with
-// an unrelated process that happens to mention the same path on its
-// command line, and is checked for liveness (not just existence) before
-// being trusted.
+// Recording state is tracked by the pw-record child's PID in a small file
+// written when recording starts, rather than pattern-matching the process
+// table (which could be confused by an unrelated process that happens to
+// mention the same path on its command line). The PID is checked for
+// liveness (not just existence) before being trusted.
 
 use std::fs;
 use std::io;
 use std::process::{Child, Command, Stdio};
 
-pub const RECORDING_PATH: &str = "/tmp/xhisper.wav";
-const PID_FILE: &str = "/tmp/xhisper.pid";
+pub const RECORDING_PATH: &str = "/tmp/rhisper.wav";
+const PID_FILE: &str = "/tmp/rhisper.pid";
 
-/// Returns the PID of xhisper's own in-progress recording, if any. A PID
+/// Returns the PID of rhisper's own in-progress recording, if any. A PID
 /// file whose process is no longer alive is treated as stale and removed.
 pub fn running_pid() -> Option<i32> {
     let pid: i32 = fs::read_to_string(PID_FILE).ok()?.trim().parse().ok()?;

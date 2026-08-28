@@ -1,8 +1,8 @@
 #!/bin/sh
-# Creates the xhispertoold symlink (argv[0]-dispatch trigger for daemon
+# Creates the rhispertoold symlink (argv[0]-dispatch trigger for daemon
 # mode) and reloads udev so the uinput access rule takes effect without a
 # reboot.
-ln -sf xhispertool /usr/bin/xhispertoold
+ln -sf rhispertool /usr/bin/rhispertoold
 
 if command -v udevadm >/dev/null 2>&1; then
     udevadm control --reload-rules || true

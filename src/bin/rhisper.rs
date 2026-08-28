@@ -1,11 +1,10 @@
-// xhisper - dictation at cursor. Port of xhisper.sh's orchestration:
-// record/stop toggle, config loading, silence detection, paste dispatch,
-// transcription, and the typed-placeholder progress UX.
+// rhisper - dictation at cursor. Orchestrates the record/stop toggle,
+// config loading, silence detection, paste dispatch, transcription, and
+// the typed-placeholder progress UX.
 //
-// Runtime dependencies shrink compared to the original: jq, bc, curl,
-// wl-clipboard/xclip are no longer required - JSON parsing, float math,
-// HTTP, and clipboard access are all in-process now. Only pw-record and
-// ffmpeg/ffprobe remain external processes.
+// Runtime dependencies are minimal: JSON parsing, float math, HTTP, and
+// clipboard access are all in-process. Only pw-record and ffmpeg/ffprobe
+// remain external processes.
 
 use std::env;
 use std::fs::{self, OpenOptions};
@@ -16,19 +15,19 @@ use std::time::{Duration, Instant};
 
 use clap::Parser;
 
-use xhisper_core::config::{self, Config, PasteMode};
-use xhisper_core::ipc::{Command as ToolCommand, ToolClient};
-use xhisper_core::provider::{self, ProviderError, TranscriptionRequest};
-use xhisper_core::{audio, clipboard, paste, silence};
+use rhisper_core::config::{self, Config, PasteMode};
+use rhisper_core::ipc::{Command as ToolCommand, ToolClient};
+use rhisper_core::provider::{self, ProviderError, TranscriptionRequest};
+use rhisper_core::{audio, clipboard, paste, silence};
 
-const LOGFILE: &str = "/tmp/xhisper.log";
-const DAEMON_LAYOUT_FILE: &str = "/tmp/xhispertoold.layout";
-const DAEMON_LOG_FILE: &str = "/tmp/xhispertoold.log";
+const LOGFILE: &str = "/tmp/rhisper.log";
+const DAEMON_LAYOUT_FILE: &str = "/tmp/rhispertoold.layout";
+const DAEMON_LOG_FILE: &str = "/tmp/rhispertoold.log";
 
 #[derive(Parser, Debug)]
-#[command(name = "xhisper", version, about = "Dictation at cursor for Linux")]
+#[command(name = "rhisper", version, about = "Dictation at cursor for Linux")]
 struct Args {
-    /// Use xhispertool/xhispertoold from this binary's directory instead of $PATH
+    /// Use rhispertool/rhispertoold from this binary's directory instead of $PATH
     #[arg(long)]
     local: bool,
 
@@ -88,14 +87,14 @@ fn main() -> std::process::ExitCode {
         }
     };
 
-    let xhispertool = tool_path("xhispertool", args.local);
-    let xhispertoold = tool_path("xhispertoold", args.local);
+    let rhispertool = tool_path("rhispertool", args.local);
+    let rhispertoold = tool_path("rhispertoold", args.local);
 
-    if !binary_exists(&xhispertool) {
-        eprintln!("Error: xhispertool not found");
+    if !binary_exists(&rhispertool) {
+        eprintln!("Error: rhispertool not found");
         eprintln!("Please either:");
-        eprintln!("  - Install the xhisper package for your distro");
-        eprintln!("  - Run 'xhisper --local' from the build directory");
+        eprintln!("  - Install the rhisper package for your distro");
+        eprintln!("  - Run 'rhisper --local' from the build directory");
         return std::process::ExitCode::FAILURE;
     }
 
@@ -107,8 +106,8 @@ fn main() -> std::process::ExitCode {
         }
     };
 
-    if let Err(e) = ensure_daemon_running(&config.keyboard_layout, &xhispertoold) {
-        eprintln!("Error: Failed to start xhispertoold daemon: {e}");
+    if let Err(e) = ensure_daemon_running(&config.keyboard_layout, &rhispertoold) {
+        eprintln!("Error: Failed to start rhispertoold daemon: {e}");
         eprintln!("Check {DAEMON_LOG_FILE} for details");
         return std::process::ExitCode::FAILURE;
     }
@@ -116,7 +115,7 @@ fn main() -> std::process::ExitCode {
     let tool = match ToolClient::connect() {
         Ok(t) => t,
         Err(e) => {
-            eprintln!("failed to connect to xhispertoold: {e}");
+            eprintln!("failed to connect to rhispertoold: {e}");
             return std::process::ExitCode::FAILURE;
         }
     };
@@ -160,7 +159,7 @@ fn run_toggle(tool: &ToolClient, config: &Config, wrap_key: Option<ToolCommand>)
                     &format!("ERROR: {detail}"),
                     started.elapsed(),
                 );
-                let placeholder = "(transcription failed - see xhisper --log)";
+                let placeholder = "(transcription failed - see rhisper --log)";
                 paste(tool, config, wrap_key, placeholder);
                 sleep_secs(0.6);
                 delete_n_chars(tool, placeholder.chars().count());
@@ -209,9 +208,9 @@ fn transcribe(config: &Config, recording: &str) -> Result<String, String> {
     })
 }
 
-/// Port of xhisper.sh's paste(): dispatches on paste-mode, typing ASCII
-/// chars directly (layout-sensitive) and batching non-ASCII runs through
-/// the clipboard, restoring the user's prior clipboard content afterward.
+/// Dispatches on paste-mode, typing ASCII chars directly (layout-sensitive)
+/// and batching non-ASCII runs through the clipboard, restoring the user's
+/// prior clipboard content afterward.
 fn paste(tool: &ToolClient, config: &Config, wrap_key: Option<ToolCommand>, text: &str) {
     match config.paste_mode {
         PasteMode::Clipboard | PasteMode::ClipboardRestore => {
@@ -346,8 +345,8 @@ fn binary_exists(path_or_name: &str) -> bool {
 
 /// Auto-starts the daemon if it isn't running, and restarts it if its
 /// persisted keyboard layout doesn't match the current config (the daemon
-/// only reads XHISPER_LAYOUT once, at startup).
-fn ensure_daemon_running(layout: &str, xhispertoold: &str) -> io::Result<()> {
+/// only reads RHISPER_LAYOUT once, at startup).
+fn ensure_daemon_running(layout: &str, rhispertoold: &str) -> io::Result<()> {
     if daemon_alive() {
         let running_layout = fs::read_to_string(DAEMON_LAYOUT_FILE)
             .unwrap_or_default()
@@ -356,7 +355,7 @@ fn ensure_daemon_running(layout: &str, xhispertoold: &str) -> io::Result<()> {
         if running_layout == layout {
             return Ok(());
         }
-        let _ = Command::new("pkill").args(["-x", "xhispertoold"]).status();
+        let _ = Command::new("pkill").args(["-x", "rhispertoold"]).status();
         std::thread::sleep(Duration::from_millis(300));
     }
 
@@ -364,8 +363,8 @@ fn ensure_daemon_running(layout: &str, xhispertoold: &str) -> io::Result<()> {
         .create(true)
         .append(true)
         .open(DAEMON_LOG_FILE)?;
-    Command::new(xhispertoold)
-        .env("XHISPER_LAYOUT", layout)
+    Command::new(rhispertoold)
+        .env("RHISPER_LAYOUT", layout)
         .stdout(Stdio::null())
         .stderr(Stdio::from(log))
         .spawn()?;
@@ -373,14 +372,14 @@ fn ensure_daemon_running(layout: &str, xhispertoold: &str) -> io::Result<()> {
     std::thread::sleep(Duration::from_secs(1));
 
     if !daemon_alive() {
-        return Err(io::Error::other("xhispertoold did not start"));
+        return Err(io::Error::other("rhispertoold did not start"));
     }
     Ok(())
 }
 
 fn daemon_alive() -> bool {
     Command::new("pgrep")
-        .args(["-x", "xhispertoold"])
+        .args(["-x", "rhispertoold"])
         .status()
         .map(|s| s.success())
         .unwrap_or(false)
@@ -389,13 +388,13 @@ fn daemon_alive() -> bool {
 /// Interactive first-time setup: creates a default config if missing,
 /// checks /dev/uinput access and runtime dependencies, and optionally
 /// prompts for a Groq API key. Replaces configure.sh; unlike it, ordinary
-/// `xhisper` invocations never require this to have been run first (see
+/// `rhisper` invocations never require this to have been run first (see
 /// config::load_or_bootstrap's non-interactive template bootstrap).
 fn run_setup() -> io::Result<()> {
     let config_path = config::config_path();
     if !config_path.exists() {
         fs::create_dir_all(config::config_dir())?;
-        fs::write(&config_path, config::DEFAULT_XHISPERRC)?;
+        fs::write(&config_path, config::DEFAULT_RHISPERRC)?;
         println!("Created default config at {}", config_path.display());
     } else {
         println!("Config already exists at {}", config_path.display());
@@ -436,14 +435,14 @@ fn run_setup() -> io::Result<()> {
         }
     }
 
-    println!("Configuration complete. Run 'xhisper' to start dictating.");
+    println!("Configuration complete. Run 'rhisper' to start dictating.");
     Ok(())
 }
 
-/// Loads `~/.env` (KEY=VALUE per line) into the process environment,
-/// mirroring xhisper.sh's `[ -f "$HOME/.env" ] && source "$HOME/.env"` for
-/// the purposes of picking up GROQ_API_KEY/OPENAI_API_KEY/XHISPER_API_KEY.
-/// Real shell-exported variables always take precedence over the file.
+/// Loads `~/.env` (KEY=VALUE per line) into the process environment, for
+/// picking up GROQ_API_KEY/OPENAI_API_KEY/RHISPER_API_KEY without requiring
+/// them to be exported in the shell. Real shell-exported variables always
+/// take precedence over the file.
 fn load_dotenv() {
     let home = env::var("HOME").unwrap_or_default();
     let Ok(contents) = fs::read_to_string(format!("{home}/.env")) else {

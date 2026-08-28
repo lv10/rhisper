@@ -1,9 +1,8 @@
-// config.rs - xhisperrc loading, defaults, and first-run bootstrap.
+// config.rs - rhisperrc loading, defaults, and first-run bootstrap.
 //
-// Port of the config section of xhisper.sh (the `while IFS=: read` loop and
-// its hardcoded defaults). The flat `key : value` format is kept as-is
-// (not switched to TOML) so existing users' config files keep working
-// unmodified after the rewrite.
+// A hand-rolled `key : value` parser and its hardcoded defaults. The flat
+// format is kept intentionally simple (not TOML) since it doesn't need
+// nested structures or arrays beyond what's already handled.
 
 use std::env;
 use std::fs;
@@ -14,7 +13,7 @@ use std::path::PathBuf;
 /// what Config::default() mirrors and what gets written out verbatim on a
 /// non-interactive first run, so there's a single source of truth that
 /// doesn't depend on locating an installed template at an unknown prefix.
-pub const DEFAULT_XHISPERRC: &str = include_str!("../default_xhisperrc");
+pub const DEFAULT_RHISPERRC: &str = include_str!("../default_rhisperrc");
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PasteMode {
@@ -70,16 +69,14 @@ pub fn config_dir() -> PathBuf {
         .ok()
         .filter(|p| !p.is_empty())
         .unwrap_or_else(|| format!("{}/.config", env::var("HOME").unwrap_or_default()));
-    PathBuf::from(base).join("xhisper")
+    PathBuf::from(base).join("rhisper")
 }
 
 pub fn config_path() -> PathBuf {
-    config_dir().join("xhisperrc")
+    config_dir().join("rhisperrc")
 }
 
-/// Trim whitespace, then one layer of surrounding double quotes - mirrors
-/// the `sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/^"//;s/"$//'` pipeline in
-/// xhisper.sh's config loader.
+/// Trim whitespace, then one layer of surrounding double quotes.
 fn trim_value(raw: &str) -> String {
     let v = raw.trim();
     let v = v.strip_prefix('"').unwrap_or(v);
@@ -91,7 +88,7 @@ fn parse_f64(value: &str, fallback: f64) -> f64 {
     value.trim().parse().unwrap_or(fallback)
 }
 
-/// Parses the xhisperrc key:value format into a Config, starting from
+/// Parses the rhisperrc key:value format into a Config, starting from
 /// defaults for any key that's absent, malformed, or unrecognized -
 /// unrecognized keys are silently ignored, exactly as the original bash
 /// `case` statement does.
@@ -161,7 +158,7 @@ pub fn load_or_bootstrap() -> io::Result<Config> {
 
     if !path.exists() {
         fs::create_dir_all(config_dir())?;
-        fs::write(&path, DEFAULT_XHISPERRC)?;
+        fs::write(&path, DEFAULT_RHISPERRC)?;
     }
 
     let contents = fs::read_to_string(&path)?;
@@ -174,7 +171,7 @@ mod tests {
 
     #[test]
     fn defaults_match_embedded_template() {
-        let from_template = parse(DEFAULT_XHISPERRC);
+        let from_template = parse(DEFAULT_RHISPERRC);
         let defaults = Config::default();
         assert_eq!(
             from_template.long_recording_threshold,

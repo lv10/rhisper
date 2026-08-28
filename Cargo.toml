@@ -1,23 +1,23 @@
 [package]
-name = "xhisper"
-version = "0.1.1"
+name = "rhisper"
+version = "0.2.0"
 edition = "2021"
 description = "Dictation at cursor for Linux"
 license = "MIT"
-repository = "https://github.com/lv10/xhisper"
+repository = "https://github.com/lv10/rhisper"
 readme = "README.md"
 
 [lib]
-name = "xhisper_core"
+name = "rhisper_core"
 path = "src/lib.rs"
 
 [[bin]]
-name = "xhisper"
-path = "src/bin/xhisper.rs"
+name = "rhisper"
+path = "src/bin/rhisper.rs"
 
 [[bin]]
-name = "xhispertool"
-path = "src/bin/xhispertool.rs"
+name = "rhispertool"
+path = "src/bin/rhispertool.rs"
 
 [dependencies]
 arboard = { version = "3.6.1", default-features = false, features = ["wayland-data-control"] }
@@ -32,8 +32,8 @@ serde_json = "1.0.151"
 opt-level = 2
 
 [package.metadata.deb]
-maintainer = "xhisper contributors"
-copyright = "2025, xhisper contributors"
+maintainer = "rhisper contributors"
+copyright = "2026, rhisper contributors"
 license-file = ["LICENSE", "0"]
 extended-description = """\
 Dictation at cursor for Linux. Records audio via a keybinding, transcribes \
@@ -45,21 +45,21 @@ section = "utils"
 priority = "optional"
 maintainer-scripts = "packaging/debian"
 assets = [
-    ["target/release/xhisper", "usr/bin/", "755"],
-    ["target/release/xhispertool", "usr/bin/", "755"],
-    ["default_xhisperrc", "usr/share/xhisper/xhisperrc.default", "644"],
-    ["packaging/xhisper-uinput.rules", "usr/lib/udev/rules.d/60-xhisper-uinput.rules", "644"],
-    ["README.md", "usr/share/doc/xhisper/README.md", "644"],
+    ["target/release/rhisper", "usr/bin/", "755"],
+    ["target/release/rhispertool", "usr/bin/", "755"],
+    ["default_rhisperrc", "usr/share/rhisper/rhisperrc.default", "644"],
+    ["packaging/rhisper-uinput.rules", "usr/lib/udev/rules.d/60-rhisper-uinput.rules", "644"],
+    ["README.md", "usr/share/doc/rhisper/README.md", "644"],
 ]
 
 [package.metadata.generate-rpm]
 license = "MIT"
 assets = [
-    { source = "target/release/xhisper", dest = "/usr/bin/xhisper", mode = "755" },
-    { source = "target/release/xhispertool", dest = "/usr/bin/xhispertool", mode = "755" },
-    { source = "default_xhisperrc", dest = "/usr/share/xhisper/xhisperrc.default", mode = "644", config = true },
-    { source = "packaging/xhisper-uinput.rules", dest = "/usr/lib/udev/rules.d/60-xhisper-uinput.rules", mode = "644" },
-    { source = "README.md", dest = "/usr/share/doc/xhisper/README.md", mode = "644", doc = true },
+    { source = "target/release/rhisper", dest = "/usr/bin/rhisper", mode = "755" },
+    { source = "target/release/rhispertool", dest = "/usr/bin/rhispertool", mode = "755" },
+    { source = "default_rhisperrc", dest = "/usr/share/rhisper/rhisperrc.default", mode = "644", config = true },
+    { source = "packaging/rhisper-uinput.rules", dest = "/usr/lib/udev/rules.d/60-rhisper-uinput.rules", mode = "644" },
+    { source = "README.md", dest = "/usr/share/doc/rhisper/README.md", mode = "644", doc = true },
 ]
 requires = { pipewire-utils = "*", ffmpeg = "*" }
 post_install_script = "packaging/rpm/postinst"

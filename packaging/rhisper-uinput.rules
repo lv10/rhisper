@@ -1,6 +1,6 @@
 # Grants the active logind session access to /dev/uinput without requiring
 # the user to be added to the "input" group and re-login. Installed by all
-# xhisper packages to /usr/lib/udev/rules.d/60-xhisper-uinput.rules.
+# rhisper packages to /usr/lib/udev/rules.d/60-rhisper-uinput.rules.
 #
 # `usermod -aG input $USER` (documented in the README as a manual fallback)
 # remains necessary on systems without a udev-tag-aware session manager

@@ -1,21 +1,21 @@
-# Maintainer: xhisper contributors
-pkgname=xhisper
-pkgver=0.1.1
+# Maintainer: rhisper contributors
+pkgname=rhisper
+pkgver=0.2.0
 pkgrel=1
 pkgdesc="Dictation at cursor for Linux"
 arch=('x86_64' 'aarch64')
-url="https://github.com/lv10/xhisper"
+url="https://github.com/lv10/rhisper"
 license=('MIT')
 depends=('pipewire' 'ffmpeg')
 makedepends=('cargo' 'nasm')  # nasm: recommended by aws-lc-sys for its assembly codegen
-backup=("usr/share/xhisper/xhisperrc.default")
+backup=("usr/share/rhisper/rhisperrc.default")
 # LTO conflicts with aws-lc-sys's CMake-built static C library (pulled in
 # transitively via reqwest's rustls TLS backend): mixing LTO-compiled Rust
 # object code with a plain (non-bitcode) C static archive produced
 # "undefined symbol" link failures against makepkg.conf's default
 # OPTIONS=(... lto ...). Confirmed via local reproduction - do not remove.
 options=('!lto')
-source=("$pkgname-$pkgver.tar.gz::https://github.com/lv10/xhisper/archive/refs/tags/v$pkgver.tar.gz")
+source=("$pkgname-$pkgver.tar.gz::https://github.com/lv10/rhisper/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('SKIP')
 
 prepare() {
@@ -38,12 +38,12 @@ check() {
 package() {
     cd "$pkgname-$pkgver"
 
-    install -Dm755 "target/release/xhisper" "$pkgdir/usr/bin/xhisper"
-    install -Dm755 "target/release/xhispertool" "$pkgdir/usr/bin/xhispertool"
-    ln -s xhispertool "$pkgdir/usr/bin/xhispertoold"
+    install -Dm755 "target/release/rhisper" "$pkgdir/usr/bin/rhisper"
+    install -Dm755 "target/release/rhispertool" "$pkgdir/usr/bin/rhispertool"
+    ln -s rhispertool "$pkgdir/usr/bin/rhispertoold"
 
-    install -Dm644 "default_xhisperrc" "$pkgdir/usr/share/xhisper/xhisperrc.default"
-    install -Dm644 "packaging/xhisper-uinput.rules" "$pkgdir/usr/lib/udev/rules.d/60-xhisper-uinput.rules"
+    install -Dm644 "default_rhisperrc" "$pkgdir/usr/share/rhisper/rhisperrc.default"
+    install -Dm644 "packaging/rhisper-uinput.rules" "$pkgdir/usr/lib/udev/rules.d/60-rhisper-uinput.rules"
     install -Dm644 "LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
     install -Dm644 "README.md" "$pkgdir/usr/share/doc/$pkgname/README.md"
 }

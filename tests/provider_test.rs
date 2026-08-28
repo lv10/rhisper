@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use std::thread;
 use std::time::Duration;
 
-use xhisper_core::provider::{
+use rhisper_core::provider::{
     OpenAiCompatibleProvider, ProviderError, TranscriptionProvider, TranscriptionRequest,
 };
 
@@ -53,7 +53,7 @@ fn spawn_mock_server(status_line: &'static str, body: &'static str) -> String {
 /// multipart body, so any bytes suffice.
 fn temp_audio_file() -> PathBuf {
     let path = std::env::temp_dir().join(format!(
-        "xhisper-provider-test-{}-{}.wav",
+        "rhisper-provider-test-{}-{}.wav",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

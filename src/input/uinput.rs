@@ -1,10 +1,8 @@
-// uinput.rs - virtual keyboard device management for xhisper.
-// Port of setup_uinput()/emit()/do_paste()/type_char()/do_backspace()/do_key()
-// from xhispertool.c onto evdev::uinput::VirtualDevice, a safe wrapper around
-// the exact same UI_SET_KEYBIT/UI_DEV_SETUP/UI_DEV_CREATE ioctls. Every
-// usleep() duration from the C implementation is preserved verbatim: these
-// values are empirically tuned against real compositor race conditions
-// (see the Danish AltGr/dead-key handling in type_char()).
+// uinput.rs - virtual keyboard device management for rhisper.
+// Built on evdev::uinput::VirtualDevice, a safe wrapper around the
+// UI_SET_KEYBIT/UI_DEV_SETUP/UI_DEV_CREATE ioctls. Every sleep duration is
+// empirically tuned against real compositor race conditions (see the
+// Danish AltGr/dead-key handling in type_char()).
 
 use std::io;
 use std::thread::sleep;
@@ -25,14 +23,13 @@ pub const KEY_LEFTMETA: KeyCode = KeyCode::KEY_LEFTMETA;
 pub const KEY_V: KeyCode = KeyCode::KEY_V;
 
 /// Owns the virtual keyboard device for the lifetime of the daemon.
-pub struct XhisperDevice {
+pub struct RhisperDevice {
     device: VirtualDevice,
 }
 
-impl XhisperDevice {
-    /// Registers a virtual USB keyboard supporting every key xhisper can
-    /// emit, mirroring setup_uinput() in xhispertool.c exactly (same key
-    /// ranges, same USB vendor/product id, same post-create settle delay).
+impl RhisperDevice {
+    /// Registers a virtual USB keyboard supporting every key rhisper can
+    /// emit.
     pub fn create() -> io::Result<Self> {
         let mut keys = AttributeSet::<KeyCode>::new();
 
@@ -88,7 +85,7 @@ impl XhisperDevice {
         }
 
         let device = VirtualDevice::builder()?
-            .name("xhisper")
+            .name("rhisper")
             .input_id(InputId::new(BusType::BUS_USB, 0x1234, 0x5678, 0))
             .with_keys(&keys)?
             .build()?;
@@ -97,7 +94,7 @@ impl XhisperDevice {
         // before the daemon starts accepting commands.
         sleep(Duration::from_micros(100_000));
 
-        Ok(XhisperDevice { device })
+        Ok(RhisperDevice { device })
     }
 
     fn emit(&mut self, code: KeyCode, value: i32) {

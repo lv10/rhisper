@@ -1,7 +1,6 @@
-// xhispertool - combined daemon and client for text input via uinput.
-// Port of xhispertool.c. Mode is selected by argv[0] (the "xhispertoold"
-// symlink installed by packaging triggers daemon mode) or an explicit
-// `--daemon` flag, exactly as in the original.
+// rhispertool - combined daemon and client for text input via uinput.
+// Mode is selected by argv[0] (the "rhispertoold" symlink installed by
+// packaging triggers daemon mode) or an explicit `--daemon` flag.
 
 use std::env;
 use std::fs;
@@ -9,10 +8,10 @@ use std::io::Write;
 use std::path::Path;
 use std::process::ExitCode;
 
-use xhisper_core::input::uinput::{self, XhisperDevice};
-use xhisper_core::ipc::{self, Command};
+use rhisper_core::input::uinput::{self, RhisperDevice};
+use rhisper_core::ipc::{self, Command};
 
-const LAYOUT_FILE: &str = "/tmp/xhispertoold.layout";
+const LAYOUT_FILE: &str = "/tmp/rhispertoold.layout";
 
 fn main() -> ExitCode {
     let args: Vec<String> = env::args().collect();
@@ -25,7 +24,7 @@ fn main() -> ExitCode {
         })
         .unwrap_or_default();
 
-    let is_daemon = prog == "xhispertoold" || args.get(1).map(String::as_str) == Some("--daemon");
+    let is_daemon = prog == "rhispertoold" || args.get(1).map(String::as_str) == Some("--daemon");
 
     if is_daemon {
         run_daemon()
@@ -35,7 +34,7 @@ fn main() -> ExitCode {
 }
 
 fn run_daemon() -> ExitCode {
-    let mut device = match XhisperDevice::create() {
+    let mut device = match RhisperDevice::create() {
         Ok(d) => d,
         Err(e) => {
             eprintln!("failed to open /dev/uinput: {e}");
@@ -47,7 +46,7 @@ fn run_daemon() -> ExitCode {
         Ok(s) => s,
         Err(e) => {
             if e.kind() == std::io::ErrorKind::AddrInUse {
-                eprintln!("xhispertoold is already running");
+                eprintln!("rhispertoold is already running");
             } else {
                 eprintln!("failed to bind socket: {e}");
             }
@@ -55,18 +54,18 @@ fn run_daemon() -> ExitCode {
         }
     };
 
-    let layout = env::var("XHISPER_LAYOUT")
+    let layout = env::var("RHISPER_LAYOUT")
         .ok()
         .filter(|l| !l.is_empty())
         .unwrap_or_else(|| "us".to_string());
 
-    // Persist the layout so xhisper.sh can detect and restart a stale daemon.
+    // Persist the layout so the orchestrator can detect and restart a stale daemon.
     if let Ok(mut f) = fs::File::create(LAYOUT_FILE) {
         let _ = writeln!(f, "{layout}");
     }
 
     println!(
-        "xhispertoold: listening on {} (layout: {layout})",
+        "rhispertoold: listening on {} (layout: {layout})",
         ipc::socket_path().display()
     );
 
@@ -98,21 +97,21 @@ fn run_daemon() -> ExitCode {
 fn show_usage() {
     eprintln!(
         "Usage:\n\
-         \x20 xhispertool paste            - Paste from clipboard (Ctrl+V)\n\
-         \x20 xhispertool type <char>      - Type a single ASCII character\n\
-         \x20 xhispertool backspace        - Press backspace\n\
+         \x20 rhispertool paste            - Paste from clipboard (Ctrl+V)\n\
+         \x20 rhispertool type <char>      - Type a single ASCII character\n\
+         \x20 rhispertool backspace        - Press backspace\n\
          \n\
          Input switching keys:\n\
-         \x20 xhispertool leftalt          - Press left alt\n\
-         \x20 xhispertool rightalt         - Press right alt\n\
-         \x20 xhispertool leftctrl         - Press left ctrl\n\
-         \x20 xhispertool rightctrl        - Press right ctrl\n\
-         \x20 xhispertool leftshift        - Press left shift\n\
-         \x20 xhispertool rightshift       - Press right shift\n\
-         \x20 xhispertool super            - Press super (Windows key)\n\
+         \x20 rhispertool leftalt          - Press left alt\n\
+         \x20 rhispertool rightalt         - Press right alt\n\
+         \x20 rhispertool leftctrl         - Press left ctrl\n\
+         \x20 rhispertool rightctrl        - Press right ctrl\n\
+         \x20 rhispertool leftshift        - Press left shift\n\
+         \x20 rhispertool rightshift       - Press right shift\n\
+         \x20 rhispertool super            - Press super (Windows key)\n\
          \n\
          Daemon:\n\
-         \x20 xhispertoold                 - Run daemon (or xhispertool --daemon)"
+         \x20 rhispertoold                 - Run daemon (or rhispertool --daemon)"
     );
 }
 
@@ -150,11 +149,11 @@ fn run_client(args: &[String]) -> ExitCode {
     let socket = match ipc::connect_client() {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("failed to connect to xhispertoold: {e}");
+            eprintln!("failed to connect to rhispertoold: {e}");
             match e.raw_os_error() {
                 Some(libc::ENOENT) | Some(libc::ECONNREFUSED) => {
-                    eprintln!("Please check if xhispertoold is running.");
-                    eprintln!("Start it with: xhispertoold &");
+                    eprintln!("Please check if rhispertoold is running.");
+                    eprintln!("Start it with: rhispertoold &");
                 }
                 Some(libc::EACCES) | Some(libc::EPERM) => {
                     eprintln!("Permission denied. Check socket permissions.");

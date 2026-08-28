@@ -1,12 +1,12 @@
-# xhisper configuration
-# Copy to ~/.config/xhisper/xhisperrc and customize
-# When in doubt, check by running 'xhisper --log'
+# rhisper configuration
+# Copy to ~/.config/rhisper/rhisperrc and customize
+# When in doubt, check by running 'rhisper --log'
 
 # Transcription Provider:
 # provider: "groq" (default), "openai", or "custom".
 #   groq   : reads GROQ_API_KEY, uses Groq's Whisper endpoint.
 #   openai : reads OPENAI_API_KEY, uses OpenAI's /audio/transcriptions endpoint.
-#   custom : reads XHISPER_API_KEY, sends requests to api-base-url below.
+#   custom : reads RHISPER_API_KEY, sends requests to api-base-url below.
 provider     : "groq"
 api-base-url : ""
 # model: overrides the provider's default model selection (e.g. "whisper-1",

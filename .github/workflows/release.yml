@@ -51,14 +51,14 @@ jobs:
       - name: Build AUR source tarball
         run: |
           version="${GITHUB_REF_NAME#v}"
-          git archive --format=tar.gz --prefix="xhisper-${version}/" -o "xhisper-${version}.tar.gz" "$GITHUB_REF_NAME"
+          git archive --format=tar.gz --prefix="rhisper-${version}/" -o "rhisper-${version}.tar.gz" "$GITHUB_REF_NAME"
 
       - name: Collect packages into a flat directory
         run: |
           mkdir -p dist
           cp target/debian/*.deb dist/
           cp target/generate-rpm/*.rpm dist/
-          cp xhisper-*.tar.gz dist/
+          cp rhisper-*.tar.gz dist/
 
       - name: Upload packages
         uses: actions/upload-artifact@v4

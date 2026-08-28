@@ -1,10 +1,10 @@
 #!/bin/sh
-# Removes the xhispertoold symlink created by postinst - dpkg only tracks
+# Removes the rhispertoold symlink created by postinst - dpkg only tracks
 # files it installed directly, not this manually-created symlink.
 set -e
 
 if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
-    rm -f /usr/bin/xhispertoold
+    rm -f /usr/bin/rhispertoold
 fi
 
 exit 0

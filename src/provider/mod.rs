@@ -84,13 +84,13 @@ pub fn resolve_provider(config: &Config) -> (Box<dyn TranscriptionProvider>, &'s
             )
         }
         Provider::Custom => {
-            let api_key = std::env::var("XHISPER_API_KEY").unwrap_or_default();
+            let api_key = std::env::var("RHISPER_API_KEY").unwrap_or_default();
             (
                 Box::new(OpenAiCompatibleProvider {
                     base_url: config.api_base_url.clone(),
                     api_key,
                 }),
-                "XHISPER_API_KEY",
+                "RHISPER_API_KEY",
             )
         }
     }

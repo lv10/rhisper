@@ -1,4 +1,4 @@
-// keymap.rs - ASCII to Linux keycode mapping tables for xhisper.
+// keymap.rs - ASCII to Linux keycode mapping tables for rhisper.
 // Mechanical port of keymap.c/keymap.h, extended with a Spanish layout.
 // One table per keyboard layout. Letters and digits share physical keys
 // across US/Danish/Spanish; only the symbol rows differ.
@@ -456,7 +456,7 @@ mod tests {
 
     #[test]
     fn non_ascii_falls_back_to_clipboard() {
-        // Non-ASCII falls back to the clipboard path in xhisper's paste logic.
+        // Non-ASCII falls back to the clipboard path in rhisper's paste logic.
         assert_eq!(keymap_lookup("us", 0xC3), -1);
         assert_eq!(keymap_lookup("dk", 0xE6), -1);
         assert_eq!(keymap_lookup("es", 0xF1), -1); // ñ
@@ -468,8 +468,7 @@ mod tests {
         expect!("gibberish", '?', k(KeyCode::KEY_SLASH) | FLAG_UPPERCASE);
     }
 
-    // Ported from tests/test_xhispertool.c: printable-ASCII classification
-    // logic that xhispertool.c layered on top of keymap_lookup().
+    // Printable-ASCII classification logic layered on top of keymap_lookup().
 
     #[test]
     fn printable_ascii_range_is_mapped() {

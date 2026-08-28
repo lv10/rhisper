@@ -1,5 +1,5 @@
-// clipboard.rs - clipboard read/write for xhisper, replacing the
-// wl-copy/wl-paste/xclip shell-outs in xhisper.sh with in-process arboard.
+// clipboard.rs - clipboard read/write for rhisper, using in-process arboard
+// instead of shelling out to wl-copy/wl-paste/xclip.
 //
 // Wayland/X11 clipboard ownership is tied to a live process serving paste
 // requests; the shelled-out `wl-copy` this replaces self-forks internally so
@@ -20,7 +20,7 @@ use arboard::{Clipboard, SetExtLinux};
 const SERVE_WINDOW: Duration = Duration::from_secs(2);
 
 /// Reads the current clipboard text, or an empty string if the clipboard is
-/// empty/unavailable/non-text - matching xhisper.sh's `$CLIP_PASTE 2>/dev/null || true`.
+/// empty/unavailable/non-text.
 pub fn get_text() -> String {
     Clipboard::new()
         .and_then(|mut c| c.get_text())
@@ -31,7 +31,7 @@ pub fn get_text() -> String {
 /// the background for SERVE_WINDOW, then lets the clipboard fall silent
 /// (matching a `wl-copy` process exiting once superseded). Fire-and-forget:
 /// callers still need their own short sleep before triggering the paste
-/// keystroke, exactly as xhisper.sh already does via non-ascii-*-delay.
+/// keystroke - see the non-ascii-*-delay config options.
 pub fn set_text(text: String) {
     thread::spawn(move || {
         if let Ok(mut clipboard) = Clipboard::new() {
