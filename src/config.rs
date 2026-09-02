@@ -4,6 +4,7 @@
 // format is kept intentionally simple (not TOML) since it doesn't need
 // nested structures or arrays beyond what's already handled.
 
+use crate::placeholder::Setting as PlaceholderSetting;
 use std::env;
 use std::fs;
 use std::io;
@@ -42,6 +43,10 @@ pub struct Config {
     pub min_speech_seconds: f64,
     pub audio_device: String,
     pub audio_device_fallback: bool,
+    pub placeholders: PlaceholderSetting,
+    pub placeholder_recording: String,
+    pub placeholder_transcribing: String,
+    pub placeholder_silent: String,
     pub provider: Provider,
     pub api_base_url: String,
     pub model: String,
@@ -61,6 +66,10 @@ impl Default for Config {
             min_speech_seconds: 0.3,
             audio_device: String::new(),
             audio_device_fallback: true,
+            placeholders: PlaceholderSetting::Auto,
+            placeholder_recording: "(recording...)".to_string(),
+            placeholder_transcribing: "(transcribing...)".to_string(),
+            placeholder_silent: "(no sound detected)".to_string(),
             provider: Provider::Groq,
             api_base_url: String::new(),
             model: String::new(),
@@ -149,6 +158,17 @@ pub fn parse(contents: &str) -> Config {
             "audio-device-fallback" => {
                 config.audio_device_fallback = parse_bool(&value, config.audio_device_fallback)
             }
+            "placeholders" => {
+                config.placeholders = match value.as_str() {
+                    "inline" => PlaceholderSetting::Inline,
+                    "notify" => PlaceholderSetting::Notify,
+                    "off" => PlaceholderSetting::Off,
+                    _ => PlaceholderSetting::Auto,
+                }
+            }
+            "placeholder-recording" => config.placeholder_recording = value,
+            "placeholder-transcribing" => config.placeholder_transcribing = value,
+            "placeholder-silent" => config.placeholder_silent = value,
             "provider" => {
                 config.provider = match value.as_str() {
                     "openai" => Provider::OpenAi,
@@ -205,6 +225,11 @@ mod tests {
             from_template.audio_device_fallback,
             defaults.audio_device_fallback
         );
+        assert_eq!(from_template.placeholders, defaults.placeholders);
+        assert_eq!(
+            from_template.placeholder_recording,
+            defaults.placeholder_recording
+        );
     }
 
     #[test]
@@ -222,6 +247,10 @@ silence-threshold  : -30
 min-speech-seconds : 0.5
 audio-device : "alsa_input.usb-Blue_Microphones-00.analog-stereo"
 audio-device-fallback : no
+placeholders : notify
+placeholder-recording : "MIC"
+placeholder-transcribing : "..."
+placeholder-silent : "quiet"
 provider : openai
 api-base-url : "https://example.com/v1"
 model : "whisper-1"
@@ -241,6 +270,10 @@ model : "whisper-1"
             "alsa_input.usb-Blue_Microphones-00.analog-stereo"
         );
         assert!(!c.audio_device_fallback);
+        assert_eq!(c.placeholders, PlaceholderSetting::Notify);
+        assert_eq!(c.placeholder_recording, "MIC");
+        assert_eq!(c.placeholder_transcribing, "...");
+        assert_eq!(c.placeholder_silent, "quiet");
         assert_eq!(c.provider, Provider::OpenAi);
         assert_eq!(c.api_base_url, "https://example.com/v1");
         assert_eq!(c.model, "whisper-1");
