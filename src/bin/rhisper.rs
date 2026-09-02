@@ -55,6 +55,10 @@ struct Args {
     #[arg(long)]
     setup: bool,
 
+    /// List available audio input devices for the audio-device config option
+    #[arg(long = "list-devices")]
+    list_devices: bool,
+
     #[arg(long)]
     leftalt: bool,
     #[arg(long)]
@@ -80,6 +84,9 @@ fn main() -> std::process::ExitCode {
     }
     if args.config {
         return print_file_or_notice(&config::config_path());
+    }
+    if args.list_devices {
+        return list_audio_devices();
     }
     if args.setup {
         return match run_setup() {
@@ -224,7 +231,7 @@ fn run_toggle(injector: &mut dyn Injector, config: &Config, wrap_key: Option<Mod
     } else {
         sleep_secs(0.2);
         paste(injector, config, wrap_key, "(recording...)");
-        match audio::start_recording() {
+        match audio::start_recording(&config.audio_device) {
             Ok(mut child) => {
                 // Blocks until a later "stop" invocation kills the recorder.
                 let _ = child.wait();
@@ -232,6 +239,88 @@ fn run_toggle(injector: &mut dyn Injector, config: &Config, wrap_key: Option<Mod
             Err(e) => {
                 eprintln!("Error: failed to start recording: {e}");
             }
+        }
+    }
+}
+
+/// Prints the capture sources usable as `audio-device` in rhisperrc.
+///
+/// `pw-dump` is used rather than `pw-record --list-targets`, which only
+/// exists in recent PipeWire builds; the dump has been stable for far
+/// longer and additionally reveals which source is the current default.
+#[cfg(target_os = "linux")]
+fn list_audio_devices() -> std::process::ExitCode {
+    let output = match Command::new("pw-dump").stderr(Stdio::null()).output() {
+        Ok(o) if o.status.success() => o.stdout,
+        Ok(_) => {
+            eprintln!("Error: pw-dump failed - is PipeWire running?");
+            return std::process::ExitCode::FAILURE;
+        }
+        Err(e) => {
+            eprintln!("Error: failed to run pw-dump: {e}");
+            return std::process::ExitCode::FAILURE;
+        }
+    };
+
+    let objects: Vec<serde_json::Value> = match serde_json::from_slice(&output) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("Error: failed to parse pw-dump output: {e}");
+            return std::process::ExitCode::FAILURE;
+        }
+    };
+
+    let default_source = objects
+        .iter()
+        .filter(|o| o["props"]["metadata.name"] == "default")
+        .flat_map(|o| o["metadata"].as_array().into_iter().flatten())
+        .find(|m| m["key"] == "default.audio.source")
+        .and_then(|m| m["value"]["name"].as_str())
+        .unwrap_or_default()
+        .to_string();
+
+    let sources: Vec<(&str, &str, bool)> = objects
+        .iter()
+        .filter(|o| o["type"] == "PipeWire:Interface:Node")
+        .map(|o| &o["info"]["props"])
+        .filter(|p| p["media.class"] == "Audio/Source")
+        .filter_map(|p| {
+            let name = p["node.name"].as_str()?;
+            let description = p["node.description"].as_str().unwrap_or(name);
+            Some((name, description, name == default_source))
+        })
+        .collect();
+
+    if sources.is_empty() {
+        println!("No audio capture sources found.");
+        return std::process::ExitCode::SUCCESS;
+    }
+
+    println!("Audio input devices (set one as 'audio-device' in rhisperrc):\n");
+    for (name, description, is_default) in sources {
+        let marker = if is_default { " (current default)" } else { "" };
+        println!("  {name}\n      {description}{marker}\n");
+    }
+    println!("An empty audio-device keeps using the system default.");
+    std::process::ExitCode::SUCCESS
+}
+
+/// macOS records through sox, which selects its input via AUDIODEV; the
+/// device names it accepts are the CoreAudio ones system_profiler reports.
+#[cfg(target_os = "macos")]
+fn list_audio_devices() -> std::process::ExitCode {
+    use std::process::Command;
+
+    println!("Audio devices (set an input's name as 'audio-device' in rhisperrc):\n");
+    match Command::new("system_profiler")
+        .arg("SPAudioDataType")
+        .status()
+    {
+        Ok(status) if status.success() => std::process::ExitCode::SUCCESS,
+        Ok(_) => std::process::ExitCode::FAILURE,
+        Err(e) => {
+            eprintln!("Error: failed to run system_profiler: {e}");
+            std::process::ExitCode::FAILURE
         }
     }
 }
