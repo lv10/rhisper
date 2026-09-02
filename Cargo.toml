@@ -1,6 +1,6 @@
 [package]
 name = "rhisper"
-version = "0.2.5"
+version = "0.2.6"
 edition = "2021"
 description = "Dictation at cursor for Linux and macOS"
 license = "MIT"
