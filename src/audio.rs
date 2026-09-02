@@ -22,6 +22,7 @@ pub struct CaptureSource {
     pub aliases: Vec<String>,
 }
 
+#[cfg(target_os = "linux")]
 impl CaptureSource {
     fn matches(&self, device: &str) -> bool {
         self.name == device || self.aliases.iter().any(|a| a == device)
