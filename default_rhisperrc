@@ -36,6 +36,25 @@ non-ascii-default-delay : 0.025
 # the active keyboard layout.
 keyboard-layout : us
 
+# Audio Input:
+# audio-device: explicit capture source. Empty = the system default input,
+# which is what rhisper has always used. Handy when several microphones are
+# connected and the system default is not the one you dictate into.
+#   Linux : a PipeWire target - node name (e.g. "alsa_input.usb-Blue_Microphones-00.analog-stereo")
+#           or numeric node id. Run 'rhisper --list-devices' to see them.
+#   macOS : a CoreAudio device name, passed to sox via AUDIODEV.
+audio-device : ""
+# audio-device-fallback: what to do when audio-device is set but that
+# device is not currently present (unplugged, headset off).
+#   yes (default) : record from the system default instead, noted in the log.
+#   no            : refuse to record and say so, rather than capturing the
+#                   wrong microphone.
+# Worth knowing: pw-record does not fail on an unknown target - PipeWire
+# quietly links the stream to the default source - so without this check
+# a missing microphone looks exactly like a working one.
+# Linux only: macOS cannot enumerate devices here, so the setting is ignored.
+audio-device-fallback : yes
+
 # Silence Detection:
 silence-threshold  : -50
 # min-speech-seconds: minimum contiguous stretch of audio above

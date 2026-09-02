@@ -55,6 +55,10 @@ struct Args {
     #[arg(long)]
     setup: bool,
 
+    /// List available audio input devices for the audio-device config option
+    #[arg(long = "list-devices")]
+    list_devices: bool,
+
     #[arg(long)]
     leftalt: bool,
     #[arg(long)]
@@ -80,6 +84,9 @@ fn main() -> std::process::ExitCode {
     }
     if args.config {
         return print_file_or_notice(&config::config_path());
+    }
+    if args.list_devices {
+        return list_audio_devices();
     }
     if args.setup {
         return match run_setup() {
@@ -168,6 +175,38 @@ fn build_injector(_config: &Config, _args: &Args) -> Result<Box<dyn Injector>, S
     CgInjector::new().map(|i| Box::new(i) as Box<dyn Injector>)
 }
 
+/// Decides which capture device this recording should use.
+///
+/// `Err` means the configured device is gone and the user asked not to fall
+/// back - better to say so than to record the wrong microphone, which is
+/// what happens by default: PipeWire links an unknown target to the default
+/// source without complaining.
+fn resolve_audio_device(config: &Config) -> Result<String, String> {
+    if config.audio_device.is_empty() {
+        return Ok(String::new());
+    }
+
+    match audio::device_available(&config.audio_device) {
+        Some(false) if config.audio_device_fallback => {
+            log_event(
+                "Audio device",
+                &format!(
+                    "'{}' not available - falling back to the system default",
+                    config.audio_device
+                ),
+                Duration::ZERO,
+            );
+            Ok(String::new())
+        }
+        Some(false) => Err(format!(
+            "audio-device '{}' is not available and audio-device-fallback is off",
+            config.audio_device
+        )),
+        // Available, or not knowable on this platform - try it either way.
+        _ => Ok(config.audio_device.clone()),
+    }
+}
+
 fn run_toggle(injector: &mut dyn Injector, config: &Config, wrap_key: Option<ModifierKey>) {
     if let Some(pid) = audio::running_pid() {
         audio::stop_recording(pid);
@@ -222,9 +261,22 @@ fn run_toggle(injector: &mut dyn Injector, config: &Config, wrap_key: Option<Mod
 
         audio::remove_recording();
     } else {
+        let device = match resolve_audio_device(config) {
+            Ok(d) => d,
+            Err(msg) => {
+                log_event("Audio device", &format!("ERROR: {msg}"), Duration::ZERO);
+                eprintln!("Error: {msg}");
+                let notice = "(configured microphone unavailable)";
+                paste(injector, config, wrap_key, notice);
+                sleep_secs(0.6);
+                delete_n_chars(injector, notice.chars().count());
+                return;
+            }
+        };
+
         sleep_secs(0.2);
         paste(injector, config, wrap_key, "(recording...)");
-        match audio::start_recording() {
+        match audio::start_recording(&device) {
             Ok(mut child) => {
                 // Blocks until a later "stop" invocation kills the recorder.
                 let _ = child.wait();
@@ -232,6 +284,55 @@ fn run_toggle(injector: &mut dyn Injector, config: &Config, wrap_key: Option<Mod
             Err(e) => {
                 eprintln!("Error: failed to start recording: {e}");
             }
+        }
+    }
+}
+
+/// Prints the capture sources usable as `audio-device` in rhisperrc.
+#[cfg(target_os = "linux")]
+fn list_audio_devices() -> std::process::ExitCode {
+    let sources = match audio::capture_sources() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Error: {e}");
+            return std::process::ExitCode::FAILURE;
+        }
+    };
+
+    if sources.is_empty() {
+        println!("No audio capture sources found.");
+        return std::process::ExitCode::SUCCESS;
+    }
+
+    println!("Audio input devices (set one as 'audio-device' in rhisperrc):\n");
+    for source in sources {
+        let marker = if source.is_default {
+            " (current default)"
+        } else {
+            ""
+        };
+        println!("  {}\n      {}{marker}\n", source.name, source.description);
+    }
+    println!("An empty audio-device keeps using the system default.");
+    std::process::ExitCode::SUCCESS
+}
+
+/// macOS records through sox, which selects its input via AUDIODEV; the
+/// device names it accepts are the CoreAudio ones system_profiler reports.
+#[cfg(target_os = "macos")]
+fn list_audio_devices() -> std::process::ExitCode {
+    use std::process::Command;
+
+    println!("Audio devices (set an input's name as 'audio-device' in rhisperrc):\n");
+    match Command::new("system_profiler")
+        .arg("SPAudioDataType")
+        .status()
+    {
+        Ok(status) if status.success() => std::process::ExitCode::SUCCESS,
+        Ok(_) => std::process::ExitCode::FAILURE,
+        Err(e) => {
+            eprintln!("Error: failed to run system_profiler: {e}");
+            std::process::ExitCode::FAILURE
         }
     }
 }

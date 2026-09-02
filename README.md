@@ -205,6 +205,30 @@ The transcription will be typed at your cursor position.
 rhisper --log
 ```
 
+**Choosing a microphone:**
+
+By default rhisper records from the system's default input. With several microphones connected you can name the one to dictate into:
+
+```sh
+rhisper --list-devices
+```
+
+Then put the device in `~/.config/rhisper/rhisperrc`:
+
+```
+audio-device : "alsa_input.usb-Anua_Mic_CM_900_Anua_Mic_CM_900-00.mono-fallback"
+```
+
+On Linux this is a PipeWire target — a node name or a numeric node id. On macOS it is a CoreAudio device name (sox's `AUDIODEV`), and `--list-devices` shows what `system_profiler` reports. Leave it empty to keep following the system default.
+
+If that microphone is not plugged in when you dictate, rhisper records from the system default instead and notes it in `rhisper --log`. To be told instead of quietly recording from somewhere else:
+
+```
+audio-device-fallback : no
+```
+
+This check exists because `pw-record` does not fail on an unknown target — PipeWire links the stream to the default source without complaining, so a missing microphone otherwise looks exactly like a working one. macOS cannot enumerate devices this way, so the setting is Linux-only.
+
 **Non-QWERTY layouts (Linux only):**
 
 Linux types by simulating physical key positions, so a non-QWERTY layout (e.g. Dvorak, International) needs an input switch key to QWERTY (e.g. rightalt) set up first. Then instead of binding to `rhisper`, bind to:
@@ -252,6 +276,8 @@ cp /usr/share/rhisper/rhisperrc.default \
 | `non-ascii-default-delay` | `0.025` | Seconds to wait before subsequent non-ASCII clipboard chunks |
 | `keyboard-layout` | `us` | **Linux only.** Keyboard layout used when typing ASCII characters (`us`, `dk`, or `es`) — see [Keyboard layout for typed symbols](#usage). Ignored on macOS, which types via direct Unicode injection |
 | `silence-threshold` | `-50` | Max volume in dB below which audio counts as quiet (e.g. `-50` means anything quieter is discarded) |
+| `audio-device-fallback` | `yes` | When `audio-device` is set but absent: `yes` records from the system default instead, `no` refuses to record. **Linux only** |
+| `audio-device` | *(empty)* | Explicit capture source; empty follows the system default. Linux: a PipeWire node name or id; macOS: a CoreAudio device name. List them with `rhisper --list-devices` |
 | `min-speech-seconds` | `0.3` | Minimum contiguous stretch of audio above `silence-threshold` required anywhere in the recording to count as real speech, regardless of how long you pause before/after |
 
 ## Troubleshooting
