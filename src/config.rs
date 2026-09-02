@@ -41,6 +41,7 @@ pub struct Config {
     pub silence_threshold: f64,
     pub min_speech_seconds: f64,
     pub audio_device: String,
+    pub audio_device_fallback: bool,
     pub provider: Provider,
     pub api_base_url: String,
     pub model: String,
@@ -59,6 +60,7 @@ impl Default for Config {
             silence_threshold: -50.0,
             min_speech_seconds: 0.3,
             audio_device: String::new(),
+            audio_device_fallback: true,
             provider: Provider::Groq,
             api_base_url: String::new(),
             model: String::new(),
@@ -88,6 +90,14 @@ fn trim_value(raw: &str) -> String {
 
 fn parse_f64(value: &str, fallback: f64) -> f64 {
     value.trim().parse().unwrap_or(fallback)
+}
+
+fn parse_bool(value: &str, fallback: bool) -> bool {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "true" | "yes" | "on" | "1" => true,
+        "false" | "no" | "off" | "0" => false,
+        _ => fallback,
+    }
 }
 
 /// Parses the rhisperrc key:value format into a Config, starting from
@@ -136,6 +146,9 @@ pub fn parse(contents: &str) -> Config {
                 config.min_speech_seconds = parse_f64(&value, config.min_speech_seconds)
             }
             "audio-device" => config.audio_device = value,
+            "audio-device-fallback" => {
+                config.audio_device_fallback = parse_bool(&value, config.audio_device_fallback)
+            }
             "provider" => {
                 config.provider = match value.as_str() {
                     "openai" => Provider::OpenAi,
@@ -188,6 +201,10 @@ mod tests {
             defaults.min_speech_seconds
         );
         assert_eq!(from_template.audio_device, defaults.audio_device);
+        assert_eq!(
+            from_template.audio_device_fallback,
+            defaults.audio_device_fallback
+        );
     }
 
     #[test]
@@ -204,6 +221,7 @@ keyboard-layout : dk
 silence-threshold  : -30
 min-speech-seconds : 0.5
 audio-device : "alsa_input.usb-Blue_Microphones-00.analog-stereo"
+audio-device-fallback : no
 provider : openai
 api-base-url : "https://example.com/v1"
 model : "whisper-1"
@@ -222,6 +240,7 @@ model : "whisper-1"
             c.audio_device,
             "alsa_input.usb-Blue_Microphones-00.analog-stereo"
         );
+        assert!(!c.audio_device_fallback);
         assert_eq!(c.provider, Provider::OpenAi);
         assert_eq!(c.api_base_url, "https://example.com/v1");
         assert_eq!(c.model, "whisper-1");

@@ -175,6 +175,38 @@ fn build_injector(_config: &Config, _args: &Args) -> Result<Box<dyn Injector>, S
     CgInjector::new().map(|i| Box::new(i) as Box<dyn Injector>)
 }
 
+/// Decides which capture device this recording should use.
+///
+/// `Err` means the configured device is gone and the user asked not to fall
+/// back - better to say so than to record the wrong microphone, which is
+/// what happens by default: PipeWire links an unknown target to the default
+/// source without complaining.
+fn resolve_audio_device(config: &Config) -> Result<String, String> {
+    if config.audio_device.is_empty() {
+        return Ok(String::new());
+    }
+
+    match audio::device_available(&config.audio_device) {
+        Some(false) if config.audio_device_fallback => {
+            log_event(
+                "Audio device",
+                &format!(
+                    "'{}' not available - falling back to the system default",
+                    config.audio_device
+                ),
+                Duration::ZERO,
+            );
+            Ok(String::new())
+        }
+        Some(false) => Err(format!(
+            "audio-device '{}' is not available and audio-device-fallback is off",
+            config.audio_device
+        )),
+        // Available, or not knowable on this platform - try it either way.
+        _ => Ok(config.audio_device.clone()),
+    }
+}
+
 fn run_toggle(injector: &mut dyn Injector, config: &Config, wrap_key: Option<ModifierKey>) {
     if let Some(pid) = audio::running_pid() {
         audio::stop_recording(pid);
@@ -229,9 +261,22 @@ fn run_toggle(injector: &mut dyn Injector, config: &Config, wrap_key: Option<Mod
 
         audio::remove_recording();
     } else {
+        let device = match resolve_audio_device(config) {
+            Ok(d) => d,
+            Err(msg) => {
+                log_event("Audio device", &format!("ERROR: {msg}"), Duration::ZERO);
+                eprintln!("Error: {msg}");
+                let notice = "(configured microphone unavailable)";
+                paste(injector, config, wrap_key, notice);
+                sleep_secs(0.6);
+                delete_n_chars(injector, notice.chars().count());
+                return;
+            }
+        };
+
         sleep_secs(0.2);
         paste(injector, config, wrap_key, "(recording...)");
-        match audio::start_recording(&config.audio_device) {
+        match audio::start_recording(&device) {
             Ok(mut child) => {
                 // Blocks until a later "stop" invocation kills the recorder.
                 let _ = child.wait();
@@ -244,52 +289,15 @@ fn run_toggle(injector: &mut dyn Injector, config: &Config, wrap_key: Option<Mod
 }
 
 /// Prints the capture sources usable as `audio-device` in rhisperrc.
-///
-/// `pw-dump` is used rather than `pw-record --list-targets`, which only
-/// exists in recent PipeWire builds; the dump has been stable for far
-/// longer and additionally reveals which source is the current default.
 #[cfg(target_os = "linux")]
 fn list_audio_devices() -> std::process::ExitCode {
-    let output = match Command::new("pw-dump").stderr(Stdio::null()).output() {
-        Ok(o) if o.status.success() => o.stdout,
-        Ok(_) => {
-            eprintln!("Error: pw-dump failed - is PipeWire running?");
-            return std::process::ExitCode::FAILURE;
-        }
+    let sources = match audio::capture_sources() {
+        Ok(s) => s,
         Err(e) => {
-            eprintln!("Error: failed to run pw-dump: {e}");
+            eprintln!("Error: {e}");
             return std::process::ExitCode::FAILURE;
         }
     };
-
-    let objects: Vec<serde_json::Value> = match serde_json::from_slice(&output) {
-        Ok(v) => v,
-        Err(e) => {
-            eprintln!("Error: failed to parse pw-dump output: {e}");
-            return std::process::ExitCode::FAILURE;
-        }
-    };
-
-    let default_source = objects
-        .iter()
-        .filter(|o| o["props"]["metadata.name"] == "default")
-        .flat_map(|o| o["metadata"].as_array().into_iter().flatten())
-        .find(|m| m["key"] == "default.audio.source")
-        .and_then(|m| m["value"]["name"].as_str())
-        .unwrap_or_default()
-        .to_string();
-
-    let sources: Vec<(&str, &str, bool)> = objects
-        .iter()
-        .filter(|o| o["type"] == "PipeWire:Interface:Node")
-        .map(|o| &o["info"]["props"])
-        .filter(|p| p["media.class"] == "Audio/Source")
-        .filter_map(|p| {
-            let name = p["node.name"].as_str()?;
-            let description = p["node.description"].as_str().unwrap_or(name);
-            Some((name, description, name == default_source))
-        })
-        .collect();
 
     if sources.is_empty() {
         println!("No audio capture sources found.");
@@ -297,9 +305,13 @@ fn list_audio_devices() -> std::process::ExitCode {
     }
 
     println!("Audio input devices (set one as 'audio-device' in rhisperrc):\n");
-    for (name, description, is_default) in sources {
-        let marker = if is_default { " (current default)" } else { "" };
-        println!("  {name}\n      {description}{marker}\n");
+    for source in sources {
+        let marker = if source.is_default {
+            " (current default)"
+        } else {
+            ""
+        };
+        println!("  {}\n      {}{marker}\n", source.name, source.description);
     }
     println!("An empty audio-device keeps using the system default.");
     std::process::ExitCode::SUCCESS
