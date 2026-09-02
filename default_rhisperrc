@@ -36,6 +36,22 @@ non-ascii-default-delay : 0.025
 # the active keyboard layout.
 keyboard-layout : us
 
+# Status Placeholders:
+# placeholders: how rhisper reports "recording" / "transcribing" / "no sound".
+#   auto   : (default) notify when paste-mode is a clipboard one and
+#            notify-send exists, inline otherwise.
+#   inline : type the status into the target field and delete it again.
+#   notify : show a desktop notification (needs notify-send; gdbus dismisses it).
+#   off    : no status feedback at all.
+# Inline placeholders briefly write into whatever you are editing and are
+# removed by sending one backspace per character - which misfires when the
+# field autocompletes or reformats. Notifications avoid that entirely.
+# macOS has no notify-send, so 'auto' resolves to inline there.
+placeholders             : "auto"
+placeholder-recording    : "(recording...)"
+placeholder-transcribing : "(transcribing...)"
+placeholder-silent       : "(no sound detected)"
+
 # Silence Detection:
 silence-threshold  : -50
 # min-speech-seconds: minimum contiguous stretch of audio above
