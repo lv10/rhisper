@@ -22,6 +22,7 @@ use rhisper_core::config::{self, Config, PasteMode};
 use rhisper_core::input::{Injector, ModifierKey};
 #[cfg(target_os = "linux")]
 use rhisper_core::paste;
+use rhisper_core::placeholder::{self, Mode as PlaceholderMode};
 use rhisper_core::provider::{self, ProviderError, TranscriptionRequest};
 use rhisper_core::{audio, clipboard, silence};
 
@@ -168,11 +169,72 @@ fn build_injector(_config: &Config, _args: &Args) -> Result<Box<dyn Injector>, S
     CgInjector::new().map(|i| Box::new(i) as Box<dyn Injector>)
 }
 
+/// Shows the "recording"/"transcribing"/"no sound" status either by typing
+/// it into the target field or as a desktop notification, per `placeholders`.
+///
+/// Inline placeholders are removed by counting characters back out again;
+/// notifications are removed by closing them. The two are kept behind one
+/// type so run_toggle never has to branch on the mode itself.
+struct Placeholder<'a> {
+    mode: PlaceholderMode,
+    config: &'a Config,
+    wrap_key: Option<ModifierKey>,
+}
+
+impl<'a> Placeholder<'a> {
+    fn new(config: &'a Config, wrap_key: Option<ModifierKey>) -> Self {
+        let mode = placeholder::resolve(
+            config.placeholders,
+            config.paste_mode,
+            placeholder::notifications_available(),
+        );
+        Placeholder {
+            mode,
+            config,
+            wrap_key,
+        }
+    }
+
+    /// Shows a status that a later step replaces or clears.
+    fn show(&self, injector: &mut dyn Injector, message: &str) {
+        match self.mode {
+            PlaceholderMode::Inline => paste(injector, self.config, self.wrap_key, message),
+            PlaceholderMode::Notify => placeholder::notify(message, true),
+            PlaceholderMode::Off => {}
+        }
+    }
+
+    /// Removes a status previously passed to show().
+    fn clear(&self, injector: &mut dyn Injector, message: &str) {
+        match self.mode {
+            PlaceholderMode::Inline => delete_n_chars(injector, message.chars().count()),
+            PlaceholderMode::Notify => placeholder::dismiss(),
+            PlaceholderMode::Off => {}
+        }
+    }
+
+    /// Shows a final message that nothing else will clear - it lingers just
+    /// long enough to be read and then goes away on its own.
+    fn show_final(&self, injector: &mut dyn Injector, message: &str) {
+        match self.mode {
+            PlaceholderMode::Inline => {
+                paste(injector, self.config, self.wrap_key, message);
+                sleep_secs(0.6);
+                delete_n_chars(injector, message.chars().count());
+            }
+            PlaceholderMode::Notify => placeholder::notify(message, false),
+            PlaceholderMode::Off => {}
+        }
+    }
+}
+
 fn run_toggle(injector: &mut dyn Injector, config: &Config, wrap_key: Option<ModifierKey>) {
+    let status = Placeholder::new(config, wrap_key);
+
     if let Some(pid) = audio::running_pid() {
         audio::stop_recording(pid);
         sleep_secs(0.2); // buffer for flush
-        delete_n_chars(injector, "(recording...)".chars().count());
+        status.clear(injector, &config.placeholder_recording);
 
         let report = silence::analyze(
             audio::RECORDING_PATH,
@@ -190,17 +252,15 @@ fn run_toggle(injector: &mut dyn Injector, config: &Config, wrap_key: Option<Mod
                 ),
                 Duration::ZERO,
             );
-            paste(injector, config, wrap_key, "(no sound detected)");
-            sleep_secs(0.6);
-            delete_n_chars(injector, "(no sound detected)".chars().count());
+            status.show_final(injector, &config.placeholder_silent);
             audio::remove_recording();
             return;
         }
 
-        paste(injector, config, wrap_key, "(transcribing...)");
+        status.show(injector, &config.placeholder_transcribing);
         let started = Instant::now();
         let text_result = transcribe(config, audio::RECORDING_PATH);
-        delete_n_chars(injector, "(transcribing...)".chars().count());
+        status.clear(injector, &config.placeholder_transcribing);
 
         match text_result {
             Ok(text) => {
@@ -213,17 +273,14 @@ fn run_toggle(injector: &mut dyn Injector, config: &Config, wrap_key: Option<Mod
                     &format!("ERROR: {detail}"),
                     started.elapsed(),
                 );
-                let placeholder = "(transcription failed - see rhisper --log)";
-                paste(injector, config, wrap_key, placeholder);
-                sleep_secs(0.6);
-                delete_n_chars(injector, placeholder.chars().count());
+                status.show_final(injector, "(transcription failed - see rhisper --log)");
             }
         }
 
         audio::remove_recording();
     } else {
         sleep_secs(0.2);
-        paste(injector, config, wrap_key, "(recording...)");
+        status.show(injector, &config.placeholder_recording);
         match audio::start_recording() {
             Ok(mut child) => {
                 // Blocks until a later "stop" invocation kills the recorder.

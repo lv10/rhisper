@@ -205,6 +205,20 @@ The transcription will be typed at your cursor position.
 rhisper --log
 ```
 
+**Status feedback while dictating:**
+
+rhisper shows what it is doing — recording, transcribing, or that it heard nothing. By default (`placeholders : auto`) that is a desktop notification whenever `paste-mode` is one of the clipboard modes, and inline text otherwise.
+
+Inline means the status is typed into the field you are dictating into and then deleted again with one backspace per character. That is fine in `type` mode, where the deletion is exactly as reliable as the typing was, but in clipboard modes the text arrives in one paste into a field that may autocomplete or reformat it, and the backspace count becomes a guess. Notifications keep the target field untouched.
+
+Force one or the other, or turn the status off entirely:
+
+```
+placeholders : notify      # auto | inline | notify | off
+```
+
+`notify` needs `notify-send` (libnotify) to post and `gdbus` (glib) to dismiss; both ship with any desktop that has notifications. macOS has no `notify-send`, so `auto` resolves to inline there. The three status texts are configurable — `placeholder-recording`, `placeholder-transcribing`, `placeholder-silent` (emoji work fine).
+
 **Non-QWERTY layouts (Linux only):**
 
 Linux types by simulating physical key positions, so a non-QWERTY layout (e.g. Dvorak, International) needs an input switch key to QWERTY (e.g. rightalt) set up first. Then instead of binding to `rhisper`, bind to:
@@ -252,6 +266,10 @@ cp /usr/share/rhisper/rhisperrc.default \
 | `non-ascii-default-delay` | `0.025` | Seconds to wait before subsequent non-ASCII clipboard chunks |
 | `keyboard-layout` | `us` | **Linux only.** Keyboard layout used when typing ASCII characters (`us`, `dk`, or `es`) — see [Keyboard layout for typed symbols](#usage). Ignored on macOS, which types via direct Unicode injection |
 | `silence-threshold` | `-50` | Max volume in dB below which audio counts as quiet (e.g. `-50` means anything quieter is discarded) |
+| `placeholders` | `auto` | How the recording/transcribing status is shown: `auto` (notify when `paste-mode` is a clipboard one and `notify-send` exists, else inline), `inline`, `notify`, or `off` |
+| `placeholder-recording` | `(recording...)` | Status shown while recording |
+| `placeholder-transcribing` | `(transcribing...)` | Status shown while the transcription request is in flight |
+| `placeholder-silent` | `(no sound detected)` | Status shown when the recording contained no speech |
 | `min-speech-seconds` | `0.3` | Minimum contiguous stretch of audio above `silence-threshold` required anywhere in the recording to count as real speech, regardless of how long you pause before/after |
 
 ## Troubleshooting
