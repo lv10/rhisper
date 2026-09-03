@@ -1,0 +1,23 @@
+name: release-please
+
+# Maintains a standing "chore(main): release X.Y.Z" PR that tracks the next
+# version + CHANGELOG.md as feat:/fix: commits land on main. Merging that PR
+# is the only manual step left: release-please pushes the vX.Y.Z tag itself,
+# which is what actually triggers release.yml (build + publish to
+# crates.io/AUR/Cloudsmith/Homebrew) - this workflow never publishes
+# anything on its own (skip-github-release in the config below).
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
