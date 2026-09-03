@@ -1,6 +1,6 @@
 # Maintainer: Luis Villamarin <luisvillamarin at gmail dot com>
 pkgname=rhisper
-pkgver=0.2.6
+pkgver=0.2.7
 pkgrel=1
 pkgdesc="Dictation at cursor for Linux"
 arch=('x86_64' 'aarch64')
