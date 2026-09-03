@@ -132,25 +132,44 @@ fn parse_capture_sources(dump: &[u8]) -> Result<Vec<CaptureSource>, String> {
         .collect())
 }
 
-/// Whether the configured device is currently present.
+/// What could be learned about the configured capture device.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DeviceInfo {
+    /// `None` when presence could not be determined - the audio server did
+    /// not respond, or the platform cannot enumerate sources.
+    pub available: Option<bool>,
+    /// Human-readable name of the source that will actually be recorded
+    /// from, e.g. "Anua Mic CM 900 Mono". `None` when unknown.
+    pub description: Option<String>,
+}
+
+/// Looks up presence and human-readable name in one go.
 ///
-/// `None` means the question could not be answered - the audio server did
-/// not respond, or the platform has no way to enumerate sources - which
-/// callers treat as "go ahead and try it", never as absent.
-///
-/// This matters because `pw-record` does *not* fail on an unknown target:
-/// PipeWire silently links the stream to the default source instead, so
-/// without this check a missing microphone is indistinguishable from a
-/// working one until you listen to the result.
+/// An empty `device` means the system default, whose description is worth
+/// resolving too: it is the answer to "which microphone is this recording
+/// from" that the user actually wants to see.
 #[cfg(target_os = "linux")]
-pub fn device_available(device: &str) -> Option<bool> {
-    let sources = capture_sources().ok()?;
-    Some(sources.iter().any(|s| s.matches(device)))
+pub fn inspect_device(device: &str) -> DeviceInfo {
+    let Ok(sources) = capture_sources() else {
+        return DeviceInfo::default();
+    };
+
+    let source = if device.is_empty() {
+        sources.iter().find(|s| s.is_default)
+    } else {
+        sources.iter().find(|s| s.matches(device))
+    };
+
+    DeviceInfo {
+        // An empty device is always "available" - there is nothing to miss.
+        available: Some(device.is_empty() || source.is_some()),
+        description: source.map(|s| s.description.clone()),
+    }
 }
 
 #[cfg(target_os = "macos")]
-pub fn device_available(_device: &str) -> Option<bool> {
-    None
+pub fn inspect_device(_device: &str) -> DeviceInfo {
+    DeviceInfo::default()
 }
 
 #[cfg(target_os = "linux")]

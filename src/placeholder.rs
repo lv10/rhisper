@@ -141,6 +141,40 @@ fn previous_id() -> Option<String> {
     (!id.is_empty() && id.chars().all(|c| c.is_ascii_digit())).then(|| id.to_string())
 }
 
+/// Substitutes `${...}` variables in a placeholder string.
+///
+/// Only a fixed set of names is recognised; anything else is left standing
+/// verbatim, so a stray `${` in a status text cannot swallow the rest of the
+/// line or turn into an empty string the user cannot explain.
+pub fn expand(template: &str, device: &str) -> String {
+    if !template.contains("${") {
+        return template.to_string();
+    }
+
+    let mut out = String::with_capacity(template.len());
+    let mut rest = template;
+
+    while let Some(start) = rest.find("${") {
+        out.push_str(&rest[..start]);
+        let after = &rest[start + 2..];
+
+        let Some(end) = after.find('}') else {
+            // Unterminated - the rest is literal text.
+            out.push_str(&rest[start..]);
+            return out;
+        };
+
+        match &after[..end] {
+            "device" => out.push_str(device),
+            _ => out.push_str(&rest[start..start + 2 + end + 1]),
+        }
+        rest = &after[end + 1..];
+    }
+
+    out.push_str(rest);
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -164,6 +198,35 @@ mod tests {
             resolve(Setting::Auto, PasteMode::ClipboardRestore, false),
             Mode::Inline
         );
+    }
+
+    #[test]
+    fn expands_the_device_variable() {
+        assert_eq!(
+            expand("🎤 ${device}", "Anua Mic CM 900"),
+            "🎤 Anua Mic CM 900"
+        );
+        assert_eq!(expand("${device} hört zu", "Webcam"), "Webcam hört zu");
+    }
+
+    #[test]
+    fn leaves_plain_strings_and_unknown_names_alone() {
+        assert_eq!(expand("(recording...)", "Mic"), "(recording...)");
+        assert_eq!(expand("${nope}", "Mic"), "${nope}");
+        assert_eq!(expand("cost: ${5}", "Mic"), "cost: ${5}");
+    }
+
+    #[test]
+    fn an_unterminated_variable_stays_literal() {
+        // Better a visibly odd status than a silently truncated one.
+        assert_eq!(expand("🎤 ${device", "Mic"), "🎤 ${device");
+        assert_eq!(expand("${", "Mic"), "${");
+    }
+
+    #[test]
+    fn expands_every_occurrence_and_survives_an_unknown_device() {
+        assert_eq!(expand("${device}/${device}", "A"), "A/A");
+        assert_eq!(expand("🎤 ${device}", ""), "🎤 ");
     }
 
     #[test]

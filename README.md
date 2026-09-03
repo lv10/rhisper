@@ -243,6 +243,14 @@ placeholders : notify      # auto | inline | notify | off
 
 `notify` needs `notify-send` (libnotify) to post and `gdbus` (glib) to dismiss; both ship with any desktop that has notifications. macOS has no `notify-send`, so `auto` resolves to inline there. The three status texts are configurable — `placeholder-recording`, `placeholder-transcribing`, `placeholder-silent` (emoji work fine).
 
+They can also name the microphone in use, via `${device}`:
+
+```
+placeholder-recording : "🎤 ${device}"      # -> 🎤 Anua Mic CM 900 Mono
+```
+
+That is the human-readable description of the source actually being recorded from — with `audio-device` set it is that device, with `audio-device` empty it is whatever the system default currently is, so the status answers "which microphone is live?" before you start talking. Where devices cannot be enumerated (macOS), it falls back to the configured value, or to `system default` when there is none. Unknown `${names}` are left in place rather than silently dropped.
+
 **Non-QWERTY layouts (Linux only):**
 
 Linux types by simulating physical key positions, so a non-QWERTY layout (e.g. Dvorak, International) needs an input switch key to QWERTY (e.g. rightalt) set up first. Then instead of binding to `rhisper`, bind to:
@@ -293,7 +301,7 @@ cp /usr/share/rhisper/rhisperrc.default \
 | `audio-device-fallback` | `yes` | When `audio-device` is set but absent: `yes` records from the system default instead, `no` refuses to record. **Linux only** |
 | `audio-device` | *(empty)* | Explicit capture source; empty follows the system default. Linux: a PipeWire node name or id; macOS: a CoreAudio device name. List them with `rhisper --list-devices` |
 | `placeholders` | `auto` | How the recording/transcribing status is shown: `auto` (notify when `paste-mode` is a clipboard one and `notify-send` exists, else inline), `inline`, `notify`, or `off` |
-| `placeholder-recording` | `(recording...)` | Status shown while recording |
+| `placeholder-recording` | `(recording...)` | Status shown while recording. May contain `${device}` — the name of the microphone in use |
 | `placeholder-transcribing` | `(transcribing...)` | Status shown while the transcription request is in flight |
 | `placeholder-silent` | `(no sound detected)` | Status shown when the recording contained no speech |
 | `min-speech-seconds` | `0.3` | Minimum contiguous stretch of audio above `silence-threshold` required anywhere in the recording to count as real speech, regardless of how long you pause before/after |

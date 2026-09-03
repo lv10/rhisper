@@ -27,6 +27,12 @@ use rhisper_core::provider::{self, ProviderError, TranscriptionRequest};
 use rhisper_core::{audio, clipboard, silence};
 
 const LOGFILE: &str = "/tmp/rhisper.log";
+/// The status text actually shown when recording started. Written by the
+/// start invocation and read by the stop one, because the two are separate
+/// processes and the text can contain variables (${device}) whose value may
+/// have changed in between - in inline mode the character count has to match
+/// what was typed, or the deletion eats the user's own text.
+const RECORDING_STATUS_FILE: &str = "/tmp/rhisper-recording-status";
 #[cfg(target_os = "linux")]
 const DAEMON_LAYOUT_FILE: &str = "/tmp/rhispertoold.layout";
 #[cfg(target_os = "linux")]
@@ -186,6 +192,9 @@ struct Placeholder<'a> {
     mode: PlaceholderMode,
     config: &'a Config,
     wrap_key: Option<ModifierKey>,
+    /// Name of the capture device, for ${device}. Resolved once - looking it
+    /// up costs a pw-dump, and all three status texts want the same answer.
+    device: String,
 }
 
 impl<'a> Placeholder<'a> {
@@ -195,20 +204,70 @@ impl<'a> Placeholder<'a> {
             config.paste_mode,
             placeholder::notifications_available(),
         );
+
+        // Only pay for the lookup when a status text actually asks for it.
+        let wants_device = [
+            &config.placeholder_recording,
+            &config.placeholder_transcribing,
+            &config.placeholder_silent,
+        ]
+        .iter()
+        .any(|t| t.contains("${"));
+
+        let device = if mode != PlaceholderMode::Off && wants_device {
+            audio::inspect_device(&config.audio_device)
+                .description
+                // Nothing enumerable (macOS, or no audio server): fall back to
+                // whatever the user configured, and say plainly when that is
+                // "the system default" rather than printing nothing.
+                .unwrap_or_else(|| match config.audio_device.as_str() {
+                    "" => "system default".to_string(),
+                    configured => configured.to_string(),
+                })
+        } else {
+            String::new()
+        };
+
         Placeholder {
             mode,
             config,
             wrap_key,
+            device,
         }
     }
 
+    /// The status text as it will be shown, variables substituted.
+    fn text(&self, template: &str) -> String {
+        placeholder::expand(template, &self.device)
+    }
+
     /// Shows a status that a later step replaces or clears.
-    fn show(&self, injector: &mut dyn Injector, message: &str) {
+    fn show(&self, injector: &mut dyn Injector, template: &str) {
+        let message = self.text(template);
         match self.mode {
-            PlaceholderMode::Inline => paste(injector, self.config, self.wrap_key, message),
-            PlaceholderMode::Notify => placeholder::notify(message, true),
+            PlaceholderMode::Inline => paste(injector, self.config, self.wrap_key, &message),
+            PlaceholderMode::Notify => placeholder::notify(&message, true),
             PlaceholderMode::Off => {}
         }
+    }
+
+    /// Shows the recording status and remembers the exact text, so the stop
+    /// invocation clears precisely what was shown.
+    fn show_recording(&self, injector: &mut dyn Injector) {
+        let message = self.text(&self.config.placeholder_recording);
+        if self.mode == PlaceholderMode::Inline {
+            let _ = fs::write(RECORDING_STATUS_FILE, &message);
+        }
+        self.show_literal(injector, &message, true);
+    }
+
+    /// Clears the recording status shown by the start invocation, using the
+    /// text it recorded rather than re-expanding the template.
+    fn clear_recording(&self, injector: &mut dyn Injector) {
+        let remembered = fs::read_to_string(RECORDING_STATUS_FILE).ok();
+        let _ = fs::remove_file(RECORDING_STATUS_FILE);
+        let message = remembered.unwrap_or_else(|| self.text(&self.config.placeholder_recording));
+        self.clear(injector, &message);
     }
 
     /// Removes a status previously passed to show().
@@ -220,16 +279,25 @@ impl<'a> Placeholder<'a> {
         }
     }
 
+    fn show_literal(&self, injector: &mut dyn Injector, message: &str, persistent: bool) {
+        match self.mode {
+            PlaceholderMode::Inline => paste(injector, self.config, self.wrap_key, message),
+            PlaceholderMode::Notify => placeholder::notify(message, persistent),
+            PlaceholderMode::Off => {}
+        }
+    }
+
     /// Shows a final message that nothing else will clear - it lingers just
     /// long enough to be read and then goes away on its own.
-    fn show_final(&self, injector: &mut dyn Injector, message: &str) {
+    fn show_final(&self, injector: &mut dyn Injector, template: &str) {
+        let message = self.text(template);
         match self.mode {
             PlaceholderMode::Inline => {
-                paste(injector, self.config, self.wrap_key, message);
+                paste(injector, self.config, self.wrap_key, &message);
                 sleep_secs(0.6);
                 delete_n_chars(injector, message.chars().count());
             }
-            PlaceholderMode::Notify => placeholder::notify(message, false),
+            PlaceholderMode::Notify => placeholder::notify(&message, false),
             PlaceholderMode::Off => {}
         }
     }
@@ -246,7 +314,7 @@ fn resolve_audio_device(config: &Config) -> Result<String, String> {
         return Ok(String::new());
     }
 
-    match audio::device_available(&config.audio_device) {
+    match audio::inspect_device(&config.audio_device).available {
         Some(false) if config.audio_device_fallback => {
             log_event(
                 "Audio device",
@@ -273,7 +341,7 @@ fn run_toggle(injector: &mut dyn Injector, config: &Config, wrap_key: Option<Mod
     if let Some(pid) = audio::running_pid() {
         audio::stop_recording(pid);
         sleep_secs(0.2); // buffer for flush
-        status.clear(injector, &config.placeholder_recording);
+        status.clear_recording(injector);
 
         let report = silence::analyze(
             audio::RECORDING_PATH,
@@ -332,7 +400,7 @@ fn run_toggle(injector: &mut dyn Injector, config: &Config, wrap_key: Option<Mod
         };
 
         sleep_secs(0.2);
-        status.show(injector, &config.placeholder_recording);
+        status.show_recording(injector);
         match audio::start_recording(&device) {
             Ok(mut child) => {
                 // Blocks until a later "stop" invocation kills the recorder.

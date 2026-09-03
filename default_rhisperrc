@@ -66,6 +66,11 @@ audio-device-fallback : yes
 # removed by sending one backspace per character - which misfires when the
 # field autocompletes or reformats. Notifications avoid that entirely.
 # macOS has no notify-send, so 'auto' resolves to inline there.
+# The three status texts may contain ${device}, which expands to the name of
+# the microphone being recorded from ("Anua Mic CM 900 Mono") - useful when
+# several are connected and you want to see which one is live before you
+# start talking. It resolves the system default too, so it works with an
+# empty audio-device. Unknown ${names} are left as they are.
 placeholders             : "auto"
 placeholder-recording    : "(recording...)"
 placeholder-transcribing : "(transcribing...)"
