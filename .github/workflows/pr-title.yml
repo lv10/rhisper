@@ -1,0 +1,30 @@
+name: PR Title
+
+# release-please decides patch vs. minor bumps (and whether a merge is
+# release-worthy at all) from the Conventional Commits prefix on the
+# squash-merge commit, which GitHub takes verbatim from the PR title. A
+# badly-titled PR merges fine but is silently invisible to release-please -
+# this check catches that before merge instead.
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  lint-title:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            chore
+            docs
+            refactor
+            test
+            ci
