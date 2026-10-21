@@ -111,6 +111,8 @@ GROQ_API_KEY=<your_API_key>
 ```
 (Or run `rhisper --setup` for an interactive prompt plus a platform permission/dependency check — `/dev/uinput` on Linux, Accessibility on macOS.)
 
+Prefer another provider? OpenAI and Gemini are also supported — see [Using Gemini](#using-gemini) and the [configuration table](#configuration).
+
 2. Bind `rhisper` binary to your favorite key:
 
 <details>
