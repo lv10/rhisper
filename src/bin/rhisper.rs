@@ -785,7 +785,7 @@ fn check_platform_permissions() {
 }
 
 /// Loads `~/.env` (KEY=VALUE per line) into the process environment, for
-/// picking up GROQ_API_KEY/OPENAI_API_KEY/RHISPER_API_KEY without requiring
+/// picking up GROQ_API_KEY/OPENAI_API_KEY/GEMINI_API_KEY/RHISPER_API_KEY without requiring
 /// them to be exported in the shell. Real shell-exported variables always
 /// take precedence over the file.
 fn load_dotenv() {

@@ -3,14 +3,15 @@
 # When in doubt, check by running 'rhisper --log'
 
 # Transcription Provider:
-# provider: "groq" (default), "openai", or "custom".
+# provider: "groq" (default), "openai", "gemini", or "custom".
 #   groq   : reads GROQ_API_KEY, uses Groq's Whisper endpoint.
 #   openai : reads OPENAI_API_KEY, uses OpenAI's /audio/transcriptions endpoint.
+#   gemini : reads GEMINI_API_KEY, uses Google Gemini (default model gemini-3.5-flash-lite).
 #   custom : reads RHISPER_API_KEY, sends requests to api-base-url below.
 provider     : "groq"
 api-base-url : ""
 # model: overrides the provider's default model selection (e.g. "whisper-1",
-# "gpt-4o-transcribe"). Empty = provider default (Groq picks large/turbo
+# "gpt-4o-transcribe", or a Gemini model id). Empty = provider default (Groq picks large/turbo
 # automatically based on long-recording-threshold below).
 model        : ""
 
