@@ -5,9 +5,15 @@
 // table (which could be confused by an unrelated process that happens to
 // mention the same path on its command line). The PID is checked for
 // liveness (not just existence) before being trusted.
+//
+// Every key press is its own process, so two presses in quick succession
+// race between checking for that PID and writing it. ToggleLock serializes
+// the start and stop phases across processes.
 
-use std::fs;
+use std::fs::{self, OpenOptions};
 use std::io;
+use std::os::fd::AsRawFd;
+use std::path::Path;
 use std::process::{Child, Command, Stdio};
 
 /// One capture source offered by the audio server.
@@ -31,6 +37,7 @@ impl CaptureSource {
 
 pub const RECORDING_PATH: &str = "/tmp/rhisper.wav";
 const PID_FILE: &str = "/tmp/rhisper.pid";
+const LOCK_FILE: &str = "/tmp/rhisper.lock";
 
 /// `device` selects an explicit capture source; empty means "whatever the
 /// system default is", which is the historical behavior. On Linux it is a
@@ -224,6 +231,62 @@ pub fn stop_recording(pid: i32) {
 
 pub fn remove_recording() {
     let _ = fs::remove_file(RECORDING_PATH);
+}
+
+/// Held by the invocation that is currently starting or stopping a
+/// recording; released on drop. It is an flock(2), so the kernel also
+/// releases it when the holder dies - a crash can never leave the toggle
+/// stuck. The file is opened close-on-exec (Rust's default), so the
+/// recorder child does not inherit the lock and hold it for the whole
+/// recording.
+pub struct ToggleLock {
+    _file: fs::File,
+}
+
+/// Takes the toggle lock without waiting. `Ok(None)` means another
+/// invocation holds it: a second press during a start or stop is treated
+/// as a bounce rather than queued, since queuing would turn a double press
+/// into start-then-immediate-stop.
+pub fn try_toggle_lock() -> io::Result<Option<ToggleLock>> {
+    try_lock_at(Path::new(LOCK_FILE))
+}
+
+fn try_lock_at(path: &Path) -> io::Result<Option<ToggleLock>> {
+    let file = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(path)?;
+    if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0 {
+        return Ok(Some(ToggleLock { _file: file }));
+    }
+    let err = io::Error::last_os_error();
+    if err.raw_os_error() == Some(libc::EWOULDBLOCK) {
+        Ok(None)
+    } else {
+        Err(err)
+    }
+}
+
+#[cfg(test)]
+mod lock_tests {
+    use super::*;
+
+    #[test]
+    fn second_lock_is_refused_until_first_is_dropped() {
+        let path = std::env::temp_dir().join(format!("rhisper-test-{}.lock", std::process::id()));
+
+        // flock binds to the open file description, not the process, so two
+        // opens in one process contend exactly like two invocations would.
+        let first = try_lock_at(&path).unwrap();
+        assert!(first.is_some());
+        assert!(try_lock_at(&path).unwrap().is_none());
+
+        drop(first);
+        assert!(try_lock_at(&path).unwrap().is_some());
+
+        let _ = fs::remove_file(&path);
+    }
 }
 
 #[cfg(all(test, target_os = "linux"))]
