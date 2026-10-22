@@ -39,6 +39,7 @@ pub struct Config {
     pub paste_mode: PasteMode,
     pub non_ascii_initial_delay: f64,
     pub non_ascii_default_delay: f64,
+    pub non_ascii_post_paste_delay: f64,
     pub keyboard_layout: String,
     pub silence_threshold: f64,
     pub min_speech_seconds: f64,
@@ -62,6 +63,7 @@ impl Default for Config {
             paste_mode: PasteMode::Type,
             non_ascii_initial_delay: 0.15,
             non_ascii_default_delay: 0.025,
+            non_ascii_post_paste_delay: 0.05,
             keyboard_layout: "us".to_string(),
             silence_threshold: -50.0,
             min_speech_seconds: 0.3,
@@ -148,6 +150,10 @@ pub fn parse(contents: &str) -> Config {
             "non-ascii-default-delay" => {
                 config.non_ascii_default_delay = parse_f64(&value, config.non_ascii_default_delay)
             }
+            "non-ascii-post-paste-delay" => {
+                config.non_ascii_post_paste_delay =
+                    parse_f64(&value, config.non_ascii_post_paste_delay)
+            }
             "keyboard-layout" => config.keyboard_layout = value,
             "silence-threshold" => {
                 config.silence_threshold = parse_f64(&value, config.silence_threshold)
@@ -216,6 +222,10 @@ mod tests {
             defaults.long_recording_threshold
         );
         assert_eq!(from_template.paste_mode, defaults.paste_mode);
+        assert_eq!(
+            from_template.non_ascii_post_paste_delay,
+            defaults.non_ascii_post_paste_delay
+        );
         assert_eq!(from_template.keyboard_layout, defaults.keyboard_layout);
         assert_eq!(from_template.silence_threshold, defaults.silence_threshold);
         assert_eq!(
@@ -244,6 +254,7 @@ language                 : "de"
 paste-mode               : "clipboard-restore"
 non-ascii-initial-delay : 0.5
 non-ascii-default-delay : 0.1
+non-ascii-post-paste-delay : 0.2
 keyboard-layout : dk
 silence-threshold  : -30
 min-speech-seconds : 0.5
@@ -264,6 +275,7 @@ model : "whisper-1"
         assert_eq!(c.paste_mode, PasteMode::ClipboardRestore);
         assert_eq!(c.non_ascii_initial_delay, 0.5);
         assert_eq!(c.non_ascii_default_delay, 0.1);
+        assert_eq!(c.non_ascii_post_paste_delay, 0.2);
         assert_eq!(c.keyboard_layout, "dk");
         assert_eq!(c.silence_threshold, -30.0);
         assert_eq!(c.min_speech_seconds, 0.5);

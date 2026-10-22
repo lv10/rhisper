@@ -566,6 +566,9 @@ fn paste(injector: &mut dyn Injector, config: &Config, wrap_key: Option<Modifier
                         });
                         first_chunk = false;
                         injector.paste_shortcut();
+                        // Apps read the clipboard some time after Ctrl+V; don't
+                        // overwrite it (next chunk or restore) before they have.
+                        sleep_secs(config.non_ascii_post_paste_delay);
                     }
                 }
             }
