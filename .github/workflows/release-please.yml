@@ -1,11 +1,14 @@
-name: release-please
-
 # Maintains a standing "chore(main): release X.Y.Z" PR that tracks the next
 # version + CHANGELOG.md as feat:/fix: commits land on main. Merging that PR
-# is the only manual step left: release-please pushes the vX.Y.Z tag itself,
-# which is what actually triggers release.yml (build + publish to
-# crates.io/AUR/Cloudsmith/Homebrew) - this workflow never publishes
-# anything on its own (skip-github-release in the config below).
+# is the only manual step left.
+#
+# skip-github-release (see the config) stops release-please from creating the
+# GitHub release, and with it the tag - and while the merged release PR stays
+# untagged release-please refuses to open any further release PR. So the
+# second job tags the merge commit itself and marks the PR as tagged. A tag
+# pushed with GITHUB_TOKEN does not trigger other workflows, but
+# workflow_dispatch is exempt, so it then starts release.yml (build + publish
+# to crates.io/AUR/Cloudsmith/Homebrew) against that tag explicitly.
 on:
   push:
     branches: [main]
@@ -13,6 +16,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  actions: write
 
 jobs:
   release-please:
@@ -21,3 +25,35 @@ jobs:
       - uses: googleapis/release-please-action@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+
+  tag-release:
+    # Only the merge commit of a release PR ("chore(main): release rhisper X.Y.Z (#N)").
+    if: "startsWith(github.event.head_commit.message, 'chore(main): release ')"
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+    steps:
+      - name: Tag the release commit and start the release pipeline
+        run: |
+          version="$(printf '%s' "$COMMIT_MESSAGE" | head -1 | sed -nE 's/^chore\(main\): release [^ ]+ ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p')"
+          pr="$(printf '%s' "$COMMIT_MESSAGE" | head -1 | sed -nE 's/.*\(#([0-9]+)\)$/\1/p')"
+          if [ -z "$version" ] || [ -z "$pr" ]; then
+            echo "::error::Could not parse version/PR from: $COMMIT_MESSAGE"
+            exit 1
+          fi
+          tag="v$version"
+
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" >/dev/null 2>&1; then
+            echo "$tag already exists, nothing to tag"
+          else
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref="refs/tags/$tag" -f sha="$GITHUB_SHA"
+            gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "$tag"
+          fi
+
+          # Unblocks release-please so it opens the next release PR.
+          gh label create "autorelease: tagged" --repo "$GITHUB_REPOSITORY" \
+            --color ededed 2>/dev/null || true
+          gh pr edit "$pr" --repo "$GITHUB_REPOSITORY" \
+            --remove-label "autorelease: pending" --add-label "autorelease: tagged"
