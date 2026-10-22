@@ -4,7 +4,8 @@
 // is schema-identical to OpenAI's own /audio/transcriptions endpoint, so a
 // single OpenAiCompatibleProvider implementation covers Groq, OpenAI, and
 // any self-hosted OpenAI-compatible endpoint - only the base URL, API key
-// env var, and default model differ.
+// env var, and default model differ. Gemini has no such endpoint, so it has
+// its own GeminiProvider that calls the native generateContent API.
 //
 // This also fixes the original transcribe()'s failure mode: it had no curl
 // exit-code or HTTP-status check, so any network failure or bad API key
@@ -14,10 +15,12 @@
 // placeholder at the cursor and log full detail, and never types raw
 // provider output on failure.
 
+mod gemini;
 mod openai_compatible;
 
 use std::path::Path;
 
+pub use gemini::GeminiProvider;
 pub use openai_compatible::OpenAiCompatibleProvider;
 
 use crate::config::{Config, Provider};
@@ -58,6 +61,7 @@ pub trait TranscriptionProvider {
 
 const GROQ_BASE_URL: &str = "https://api.groq.com/openai/v1";
 const OPENAI_BASE_URL: &str = "https://api.openai.com/v1";
+const GEMINI_BASE_URL: &str = "https://generativelanguage.googleapis.com/v1beta";
 
 /// Builds the configured provider plus the env var its API key comes from
 /// (surfaced in MissingApiKey guidance rather than baked silently in).
@@ -81,6 +85,16 @@ pub fn resolve_provider(config: &Config) -> (Box<dyn TranscriptionProvider>, &'s
                     api_key,
                 }),
                 "OPENAI_API_KEY",
+            )
+        }
+        Provider::Gemini => {
+            let api_key = std::env::var("GEMINI_API_KEY").unwrap_or_default();
+            (
+                Box::new(GeminiProvider {
+                    base_url: GEMINI_BASE_URL.to_string(),
+                    api_key,
+                }),
+                "GEMINI_API_KEY",
             )
         }
         Provider::Custom => {
@@ -113,6 +127,30 @@ pub fn default_model(
             }
         }
         Provider::OpenAi => "whisper-1",
+        Provider::Gemini => "gemini-3.5-flash-lite",
         Provider::Custom => "",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_models_per_provider() {
+        assert_eq!(
+            default_model(Provider::Gemini, 10.0, 1000.0),
+            "gemini-3.5-flash-lite"
+        );
+        assert_eq!(default_model(Provider::OpenAi, 10.0, 1000.0), "whisper-1");
+        assert_eq!(default_model(Provider::Custom, 10.0, 1000.0), "");
+        assert_eq!(
+            default_model(Provider::Groq, 10.0, 1000.0),
+            "whisper-large-v3-turbo"
+        );
+        assert_eq!(
+            default_model(Provider::Groq, 2000.0, 1000.0),
+            "whisper-large-v3"
+        );
     }
 }
