@@ -336,6 +336,26 @@ fn resolve_audio_device(config: &Config) -> Result<String, String> {
 }
 
 fn run_toggle(injector: &mut dyn Injector, config: &Config, wrap_key: Option<ModifierKey>) {
+    // Held for the whole stop phase (so a press during transcription cannot
+    // start a recorder on the file still being read, or interleave its
+    // placeholder with ours), and in the start phase until the PID file is
+    // written. If the lock itself is unusable, carry on unlocked as before.
+    let lock = match audio::try_toggle_lock() {
+        Ok(Some(lock)) => Some(lock),
+        Ok(None) => {
+            log_event(
+                "Toggle",
+                "ignored: another invocation is starting or stopping",
+                Duration::ZERO,
+            );
+            return;
+        }
+        Err(e) => {
+            eprintln!("Warning: toggle lock unavailable: {e}");
+            None
+        }
+    };
+
     let status = Placeholder::new(config, wrap_key);
 
     if let Some(pid) = audio::running_pid() {
@@ -403,6 +423,9 @@ fn run_toggle(injector: &mut dyn Injector, config: &Config, wrap_key: Option<Mod
         status.show_recording(injector);
         match audio::start_recording(&device) {
             Ok(mut child) => {
+                // The PID file is written, so a later press finds this
+                // recording - let it in to stop it.
+                drop(lock);
                 // Blocks until a later "stop" invocation kills the recorder.
                 let _ = child.wait();
             }
@@ -765,7 +788,7 @@ fn check_platform_permissions() {
 }
 
 /// Loads `~/.env` (KEY=VALUE per line) into the process environment, for
-/// picking up GROQ_API_KEY/OPENAI_API_KEY/RHISPER_API_KEY without requiring
+/// picking up GROQ_API_KEY/OPENAI_API_KEY/GEMINI_API_KEY/RHISPER_API_KEY without requiring
 /// them to be exported in the shell. Real shell-exported variables always
 /// take precedence over the file.
 fn load_dotenv() {

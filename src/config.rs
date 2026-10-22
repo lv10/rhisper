@@ -27,6 +27,7 @@ pub enum PasteMode {
 pub enum Provider {
     Groq,
     OpenAi,
+    Gemini,
     Custom,
 }
 
@@ -178,6 +179,7 @@ pub fn parse(contents: &str) -> Config {
             "provider" => {
                 config.provider = match value.as_str() {
                     "openai" => Provider::OpenAi,
+                    "gemini" => Provider::Gemini,
                     "custom" => Provider::Custom,
                     _ => Provider::Groq,
                 }
@@ -289,6 +291,14 @@ model : "whisper-1"
         assert_eq!(c.provider, Provider::OpenAi);
         assert_eq!(c.api_base_url, "https://example.com/v1");
         assert_eq!(c.model, "whisper-1");
+    }
+
+    #[test]
+    fn provider_gemini_parses_and_unknown_values_fall_back_to_groq() {
+        assert_eq!(parse("provider: gemini\n").provider, Provider::Gemini);
+        assert_eq!(parse("provider: \"gemini\"\n").provider, Provider::Gemini);
+        assert_eq!(parse("provider: nonsense\n").provider, Provider::Groq);
+        assert_eq!(parse("").provider, Provider::Groq);
     }
 
     #[test]
