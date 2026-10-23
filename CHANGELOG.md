@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/lv10/rhisper/compare/v0.3.1...v0.3.2) (2026-10-23)
+
+
+### Bug Fixes
+
+* raise non-ascii-post-paste-delay default to 0.2s ([#40](https://github.com/lv10/rhisper/issues/40)) ([6f093cf](https://github.com/lv10/rhisper/commit/6f093cfed7b6685136f1a1acaaf8cd827b9b4de6))
+
 ## [0.3.1](https://github.com/lv10/rhisper/compare/v0.3.0...v0.3.1) (2026-10-22)
 
 
