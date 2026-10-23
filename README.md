@@ -312,7 +312,7 @@ The default model is `gemini-3.5-flash-lite`; set `model` to use another one. Ge
 | `paste-mode` | `type` | `type` (layout-sensitive, keeps clipboard), `clipboard` (always paste via clipboard, overwrites clipboard), or `clipboard-restore` (like `clipboard`, but saves and restores previous clipboard content) |
 | `non-ascii-initial-delay` | `0.15` | Seconds to wait before pasting the first non-ASCII clipboard chunk — increase if the first character is wrong |
 | `non-ascii-default-delay` | `0.025` | Seconds to wait before subsequent non-ASCII clipboard chunks |
-| `non-ascii-post-paste-delay` | `0.05` | Seconds to wait after each non-ASCII paste before the clipboard is overwritten or restored, so the target app can read it — increase if accented characters go missing |
+| `non-ascii-post-paste-delay` | `0.2` | Seconds to wait after each non-ASCII paste before the clipboard is overwritten or restored, so the target app can read it — increase if accented characters go missing |
 | `keyboard-layout` | `us` | **Linux only.** Keyboard layout used when typing ASCII characters (`us`, `dk`, or `es`) — see [Keyboard layout for typed symbols](#usage). Ignored on macOS, which types via direct Unicode injection |
 | `silence-threshold` | `-50` | Max volume in dB below which audio counts as quiet (e.g. `-50` means anything quieter is discarded) |
 | `audio-device-fallback` | `yes` | When `audio-device` is set but absent: `yes` records from the system default instead, `no` refuses to record. **Linux only** |

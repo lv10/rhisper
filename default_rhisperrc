@@ -29,7 +29,7 @@ paste-mode               : "type"
 # Paste Timing (seconds):
 non-ascii-initial-delay : 0.15 # Increase this if first character comes out wrong.
 non-ascii-default-delay : 0.025
-non-ascii-post-paste-delay : 0.05 # Increase this if accented characters go missing or come out wrong (X11).
+non-ascii-post-paste-delay : 0.2 # Increase this if accented characters go missing or come out wrong (X11).
 
 # Keyboard Layout (Linux only):
 # Layout used when typing ASCII characters (us | dk | es).
