@@ -63,7 +63,7 @@ impl Default for Config {
             paste_mode: PasteMode::Type,
             non_ascii_initial_delay: 0.15,
             non_ascii_default_delay: 0.025,
-            non_ascii_post_paste_delay: 0.05,
+            non_ascii_post_paste_delay: 0.2,
             keyboard_layout: "us".to_string(),
             silence_threshold: -50.0,
             min_speech_seconds: 0.3,
