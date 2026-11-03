@@ -33,8 +33,25 @@ jobs:
       - name: Clippy
         run: cargo clippy --all-targets --locked -- -D warnings
 
+  # Two macOS jobs. The Intel one keeps the name `rust-macos` (the required
+  # status check): GitHub's arm64 macOS pool has been short on capacity and
+  # jobs time out waiting for a runner. The arm64 job still runs so Apple
+  # Silicon is covered when a runner is free, but cannot fail the workflow.
   rust-macos:
-    runs-on: macos-15-intel
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    continue-on-error: ${{ matrix.optional }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: rust-macos
+            runner: macos-15-intel
+            optional: false
+          - name: rust-macos-arm64
+            runner: macos-latest
+            optional: true
     steps:
       - uses: actions/checkout@v4
 
