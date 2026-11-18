@@ -5,6 +5,20 @@ CLAUDE.md
 context.txt
 archive/
 
+# AI agent / tooling files
+.claude/
+.specify/
+specs/
+AGENTS.md
+GEMINI.md
+.cursor/
+.cursorrules
+.codex/
+.gemini/
+.aider*
+.windsurf/
+.mcp.json
+
 # Added by cargo
 
 /target
