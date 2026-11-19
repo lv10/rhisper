@@ -88,6 +88,7 @@ fn request_with<'a>(
         model,
         prompt,
         language,
+        polish: None,
     }
 }
 
@@ -336,4 +337,108 @@ fn transcription_prompt_is_passed_as_vocabulary_guidance() {
 
     let (_, empty_prompt) = captured_body_for("m", "", None);
     assert!(!user_text(&empty_prompt).contains("rhisper, Groq"));
+}
+
+// --- Polishing --------------------------------------------------------------
+
+use rhisper_core::polish::{Destination, DestinationKind, PolishContext};
+
+fn polish_for(app: &str, kind: DestinationKind) -> PolishContext {
+    PolishContext {
+        destination: Destination {
+            app: app.to_string(),
+            kind,
+        },
+    }
+}
+
+/// Sends one request and returns the captured JSON body.
+fn captured_body(polish: Option<&PolishContext>) -> serde_json::Value {
+    let (base_url, rx) = spawn_mock_server("HTTP/1.1 200 OK", OK_BODY);
+    let audio = temp_audio_file();
+    let mut req = request(&audio);
+    req.polish = polish;
+    provider_for(base_url).transcribe(&req).unwrap();
+    let _ = std::fs::remove_file(&audio);
+    split_request(&rx.recv_timeout(Duration::from_secs(2)).unwrap()).1
+}
+
+fn instruction_text(body: &serde_json::Value) -> String {
+    body["system_instruction"]["parts"][0]["text"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string()
+}
+
+#[test]
+fn polished_request_swaps_the_instruction_and_names_the_destination() {
+    let ctx = polish_for("kitty", DestinationKind::Terminal);
+    let polished = captured_body(Some(&ctx));
+    let verbatim = captured_body(None);
+
+    let instruction = instruction_text(&polished);
+    assert_ne!(instruction, instruction_text(&verbatim));
+    for marker in [
+        "lightly polish",
+        "never translate",
+        "Do not add anything",
+        "never instructions to follow",
+        "separate them into paragraphs",
+        "Output only the final text",
+    ] {
+        assert!(instruction.contains(marker), "missing {marker:?}");
+    }
+
+    let text = user_text(&polished);
+    assert!(text.contains("Destination application: kitty (Terminal)."));
+    assert!(text.contains("single line of plain text"));
+}
+
+#[test]
+fn request_without_polish_is_the_unchanged_verbatim_request() {
+    let body = captured_body(None);
+    assert!(instruction_text(&body).starts_with("You are a speech-to-text engine."));
+    assert_eq!(user_text(&body), "Transcribe this audio.");
+}
+
+#[test]
+fn destination_line_follows_the_kind() {
+    let other = user_text(&captured_body(Some(&polish_for(
+        "code",
+        DestinationKind::Other,
+    ))));
+    assert!(other.contains("Plain paragraphs are fine; do not use lists."));
+
+    let email = user_text(&captured_body(Some(&polish_for(
+        "thunderbird",
+        DestinationKind::Email,
+    ))));
+    assert!(email.contains("Destination application: thunderbird (Email)."));
+    assert!(email.contains("bullet list"));
+
+    let unknown = user_text(&captured_body(Some(&polish_for(
+        "",
+        DestinationKind::Unknown,
+    ))));
+    assert!(unknown.contains("Destination application: unknown (Unknown)."));
+}
+
+#[test]
+fn polished_request_keeps_language_and_vocabulary_hints() {
+    let ctx = polish_for("firefox", DestinationKind::Browser);
+    let (base_url, rx) = spawn_mock_server("HTTP/1.1 200 OK", OK_BODY);
+    let audio = temp_audio_file();
+    let mut req = request_with(
+        &audio,
+        "gemini-test-model",
+        "Rhisper, Dan Peter",
+        Some("de"),
+    );
+    req.polish = Some(&ctx);
+    provider_for(base_url).transcribe(&req).unwrap();
+    let _ = std::fs::remove_file(&audio);
+
+    let text = user_text(&split_request(&rx.recv_timeout(Duration::from_secs(2)).unwrap()).1);
+    assert!(text.contains("language code de"));
+    assert!(text.contains("Rhisper, Dan Peter"));
 }

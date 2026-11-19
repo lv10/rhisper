@@ -24,12 +24,17 @@ pub use gemini::GeminiProvider;
 pub use openai_compatible::OpenAiCompatibleProvider;
 
 use crate::config::{Config, Provider};
+use crate::polish::PolishContext;
 
+#[derive(Clone, Copy)]
 pub struct TranscriptionRequest<'a> {
     pub audio_path: &'a Path,
     pub model: &'a str,
     pub prompt: &'a str,
     pub language: Option<&'a str>,
+    /// Set when the transcript should be lightly polished. Only Gemini
+    /// reads it; the Whisper-style providers ignore it.
+    pub polish: Option<&'a PolishContext>,
 }
 
 #[derive(Debug)]
@@ -57,6 +62,27 @@ impl std::error::Error for ProviderError {}
 
 pub trait TranscriptionProvider {
     fn transcribe(&self, req: &TranscriptionRequest) -> Result<String, ProviderError>;
+}
+
+/// Transcribes, polishing if the request asks for it. A failed polish must
+/// not lose the dictation, so any error except a missing key is retried once
+/// as a plain verbatim request. Returns the final result plus the polished
+/// attempt's error (if it failed) so the caller can log it.
+pub fn transcribe_with_fallback(
+    provider: &dyn TranscriptionProvider,
+    req: &TranscriptionRequest,
+) -> (Result<String, ProviderError>, Option<ProviderError>) {
+    let first = provider.transcribe(req);
+    match first {
+        Err(e) if req.polish.is_some() && !matches!(e, ProviderError::MissingApiKey) => {
+            let verbatim = TranscriptionRequest {
+                polish: None,
+                ..*req
+            };
+            (provider.transcribe(&verbatim), Some(e))
+        }
+        other => (other, None),
+    }
 }
 
 const GROQ_BASE_URL: &str = "https://api.groq.com/openai/v1";
@@ -135,6 +161,118 @@ pub fn default_model(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::polish::{Destination, DestinationKind};
+    use std::cell::RefCell;
+
+    /// Replays scripted results and records whether each call was polished.
+    struct Scripted {
+        results: RefCell<Vec<Result<String, ProviderError>>>,
+        polished_calls: RefCell<Vec<bool>>,
+    }
+
+    impl Scripted {
+        fn new(results: Vec<Result<String, ProviderError>>) -> Self {
+            Scripted {
+                results: RefCell::new(results),
+                polished_calls: RefCell::new(Vec::new()),
+            }
+        }
+    }
+
+    impl TranscriptionProvider for Scripted {
+        fn transcribe(&self, req: &TranscriptionRequest) -> Result<String, ProviderError> {
+            self.polished_calls.borrow_mut().push(req.polish.is_some());
+            self.results.borrow_mut().remove(0)
+        }
+    }
+
+    fn ctx() -> PolishContext {
+        PolishContext {
+            destination: Destination {
+                app: "firefox".to_string(),
+                kind: DestinationKind::Browser,
+            },
+        }
+    }
+
+    fn request<'a>(polish: Option<&'a PolishContext>) -> TranscriptionRequest<'a> {
+        TranscriptionRequest {
+            audio_path: Path::new("unused.wav"),
+            model: "m",
+            prompt: "",
+            language: None,
+            polish,
+        }
+    }
+
+    fn http_500() -> ProviderError {
+        ProviderError::Http {
+            status: 500,
+            body: "boom".to_string(),
+        }
+    }
+
+    #[test]
+    fn failed_polish_is_retried_verbatim_and_the_error_is_reported() {
+        let provider = Scripted::new(vec![Err(http_500()), Ok("literal".to_string())]);
+        let c = ctx();
+        let (result, polish_error) = transcribe_with_fallback(&provider, &request(Some(&c)));
+        assert_eq!(result.unwrap(), "literal");
+        assert!(matches!(
+            polish_error,
+            Some(ProviderError::Http { status: 500, .. })
+        ));
+        assert_eq!(*provider.polished_calls.borrow(), vec![true, false]);
+    }
+
+    #[test]
+    fn successful_polish_makes_a_single_call() {
+        let provider = Scripted::new(vec![Ok("polished".to_string())]);
+        let c = ctx();
+        let (result, polish_error) = transcribe_with_fallback(&provider, &request(Some(&c)));
+        assert_eq!(result.unwrap(), "polished");
+        assert!(polish_error.is_none());
+        assert_eq!(*provider.polished_calls.borrow(), vec![true]);
+    }
+
+    #[test]
+    fn missing_key_is_not_retried() {
+        let provider = Scripted::new(vec![Err(ProviderError::MissingApiKey)]);
+        let c = ctx();
+        let (result, polish_error) = transcribe_with_fallback(&provider, &request(Some(&c)));
+        assert!(matches!(result, Err(ProviderError::MissingApiKey)));
+        assert!(polish_error.is_none());
+        assert_eq!(provider.polished_calls.borrow().len(), 1);
+    }
+
+    #[test]
+    fn empty_polished_reply_is_retried() {
+        let provider = Scripted::new(vec![
+            Err(ProviderError::UnexpectedResponseShape("{}".to_string())),
+            Ok("literal".to_string()),
+        ]);
+        let c = ctx();
+        let (result, _) = transcribe_with_fallback(&provider, &request(Some(&c)));
+        assert_eq!(result.unwrap(), "literal");
+    }
+
+    #[test]
+    fn when_both_attempts_fail_the_verbatim_error_wins() {
+        let provider = Scripted::new(vec![Err(http_500()), Err(ProviderError::MissingApiKey)]);
+        let c = ctx();
+        let (result, polish_error) = transcribe_with_fallback(&provider, &request(Some(&c)));
+        assert!(matches!(result, Err(ProviderError::MissingApiKey)));
+        assert!(polish_error.is_some());
+    }
+
+    #[test]
+    fn verbatim_requests_are_never_retried() {
+        let provider = Scripted::new(vec![Err(http_500())]);
+        let (result, polish_error) = transcribe_with_fallback(&provider, &request(None));
+        assert!(result.is_err());
+        assert!(polish_error.is_none());
+        assert_eq!(provider.polished_calls.borrow().len(), 1);
+    }
 
     #[test]
     fn default_models_per_provider() {

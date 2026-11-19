@@ -6,5 +6,6 @@ pub mod input;
 pub mod ipc;
 pub mod paste;
 pub mod placeholder;
+pub mod polish;
 pub mod provider;
 pub mod silence;

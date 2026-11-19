@@ -31,11 +31,22 @@ pub enum Provider {
     Custom,
 }
 
+/// Whether dictation is lightly polished (slips removed, paragraphs, lists
+/// where the destination suits them) rather than typed verbatim. `Auto`
+/// follows the provider: on for Gemini, off for everything else.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PolishSetting {
+    Auto,
+    On,
+    Off,
+}
+
 #[derive(Debug, Clone)]
 pub struct Config {
     pub long_recording_threshold: f64,
     pub transcription_prompt: String,
     pub language: String,
+    pub polish: PolishSetting,
     pub paste_mode: PasteMode,
     pub non_ascii_initial_delay: f64,
     pub non_ascii_default_delay: f64,
@@ -60,6 +71,7 @@ impl Default for Config {
             long_recording_threshold: 1000.0,
             transcription_prompt: String::new(),
             language: String::new(),
+            polish: PolishSetting::Auto,
             paste_mode: PasteMode::Type,
             non_ascii_initial_delay: 0.15,
             non_ascii_default_delay: 0.025,
@@ -137,6 +149,13 @@ pub fn parse(contents: &str) -> Config {
             }
             "transcription-prompt" => config.transcription_prompt = value,
             "language" => config.language = value,
+            "polish" => {
+                config.polish = match value.to_ascii_lowercase().as_str() {
+                    "on" => PolishSetting::On,
+                    "off" => PolishSetting::Off,
+                    _ => PolishSetting::Auto,
+                }
+            }
             "paste-mode" => {
                 config.paste_mode = match value.as_str() {
                     "clipboard" => PasteMode::Clipboard,
@@ -222,6 +241,7 @@ mod tests {
             defaults.long_recording_threshold
         );
         assert_eq!(from_template.paste_mode, defaults.paste_mode);
+        assert_eq!(from_template.polish, defaults.polish);
         assert_eq!(
             from_template.non_ascii_post_paste_delay,
             defaults.non_ascii_post_paste_delay
@@ -251,6 +271,7 @@ mod tests {
 long-recording-threshold : 42
 transcription-prompt     : "hello world"
 language                 : "de"
+polish                   : "off"
 paste-mode               : "clipboard-restore"
 non-ascii-initial-delay : 0.5
 non-ascii-default-delay : 0.1
@@ -272,6 +293,7 @@ model : "whisper-1"
         assert_eq!(c.long_recording_threshold, 42.0);
         assert_eq!(c.transcription_prompt, "hello world");
         assert_eq!(c.language, "de");
+        assert_eq!(c.polish, PolishSetting::Off);
         assert_eq!(c.paste_mode, PasteMode::ClipboardRestore);
         assert_eq!(c.non_ascii_initial_delay, 0.5);
         assert_eq!(c.non_ascii_default_delay, 0.1);
@@ -299,6 +321,14 @@ model : "whisper-1"
         assert_eq!(parse("provider: \"gemini\"\n").provider, Provider::Gemini);
         assert_eq!(parse("provider: nonsense\n").provider, Provider::Groq);
         assert_eq!(parse("").provider, Provider::Groq);
+    }
+
+    #[test]
+    fn polish_parses_case_insensitively_and_unknown_values_mean_auto() {
+        assert_eq!(parse("polish: ON\n").polish, PolishSetting::On);
+        assert_eq!(parse("polish: \"off\"\n").polish, PolishSetting::Off);
+        assert_eq!(parse("polish: bogus\n").polish, PolishSetting::Auto);
+        assert_eq!(parse("").polish, PolishSetting::Auto);
     }
 
     #[test]
