@@ -18,11 +18,12 @@ use std::time::{Duration, Instant};
 
 use clap::Parser;
 
-use rhisper_core::config::{self, Config, PasteMode};
+use rhisper_core::config::{self, Config, PasteMode, PolishSetting};
 use rhisper_core::input::{Injector, ModifierKey};
 #[cfg(target_os = "linux")]
 use rhisper_core::paste;
 use rhisper_core::placeholder::{self, Mode as PlaceholderMode};
+use rhisper_core::polish;
 use rhisper_core::provider::{self, ProviderError, TranscriptionRequest};
 use rhisper_core::{audio, clipboard, silence};
 
@@ -498,17 +499,52 @@ fn transcribe(config: &Config, recording: &str) -> Result<String, String> {
 
     let language = (!config.language.is_empty()).then_some(config.language.as_str());
 
+    if config.polish == PolishSetting::On && config.provider != config::Provider::Gemini {
+        log_event(
+            "Polish",
+            "ignored: only supported with provider gemini",
+            Duration::ZERO,
+        );
+    }
+    let polish_context = polish::build_polish_context(config.polish, config.provider);
+    if let Some(ctx) = &polish_context {
+        let dest = &ctx.destination;
+        log_event(
+            "Destination",
+            &format!("{} ({:?})", dest.app, dest.kind),
+            Duration::ZERO,
+        );
+    }
+
     let request = TranscriptionRequest {
         audio_path: Path::new(recording),
         model: &model,
         prompt: &config.transcription_prompt,
         language,
+        polish: polish_context.as_ref(),
     };
 
-    provider.transcribe(&request).map_err(|e| match e {
-        ProviderError::MissingApiKey => format!("missing API key: set ${api_key_env}"),
-        other => other.to_string(),
-    })
+    let (result, polish_error) = provider::transcribe_with_fallback(provider.as_ref(), &request);
+    // Only text that came back from a polished request is reshaped; after a
+    // fallback the verbatim transcript is typed as it always was.
+    let polished = polish_error.is_none();
+    if let Some(e) = polish_error {
+        log_event(
+            "Polish",
+            &format!("failed, used verbatim: {e}"),
+            Duration::ZERO,
+        );
+    }
+
+    result
+        .map(|text| match (&polish_context, polished) {
+            (Some(ctx), true) => polish::finalize(ctx.destination.kind, &text),
+            _ => text,
+        })
+        .map_err(|e| match e {
+            ProviderError::MissingApiKey => format!("missing API key: set ${api_key_env}"),
+            other => other.to_string(),
+        })
 }
 
 /// Dispatches on paste-mode. On Linux, Type mode types ASCII chars directly

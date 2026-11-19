@@ -77,6 +77,7 @@ fn request(audio_path: &std::path::Path) -> TranscriptionRequest<'_> {
         model: "whisper-large-v3-turbo",
         prompt: "",
         language: None,
+        polish: None,
     }
 }
 

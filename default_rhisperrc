@@ -21,6 +21,14 @@ transcription-prompt     : ""
 # language: ISO-639-1 code (e.g., de, en, fr). Empty = auto-detect.
 language                 : ""
 
+# polish: light cleanup of what you said (drops fillers, false starts and
+# self-corrections), grouped into paragraphs, with lists only where the app
+# you are typing into suits them.
+#   auto (default) : on for provider gemini, off for every other provider.
+#   on             : same as auto today (only Gemini supports it).
+#   off            : verbatim transcript, exactly as before.
+polish                   : "auto"
+
 # paste-mode: "type" (layout-sensitive, keeps clipboard),
 #             "clipboard" (always paste via clipboard, overwrites clipboard), or
 #             "clipboard-restore" (like clipboard, but saves and restores previous clipboard content)

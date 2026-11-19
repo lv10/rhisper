@@ -299,7 +299,25 @@ GEMINI_API_KEY=<your_API_key>
 provider : "gemini"
 ```
 
-The default model is `gemini-3.5-flash-lite`; set `model` to use another one. Gemini is a general-purpose model rather than a dedicated speech-to-text model, so rhisper instructs it to return only the verbatim transcript, but results and latency can differ from Whisper-based providers. Recordings larger than about 14 MB (roughly 7 minutes of audio at the default recording format) are rejected with an error placeholder.
+The default model is `gemini-3.5-flash-lite`; set `model` to use another one. Gemini is a general-purpose model rather than a dedicated speech-to-text model, so rhisper instructs it to return only the transcript (lightly polished by default, see [Polishing](#polishing-gemini-only)), but results and latency can differ from Whisper-based providers. Recordings larger than about 14 MB (roughly 7 minutes of audio at the default recording format) are rejected with an error placeholder.
+
+### Polishing (Gemini only)
+
+With `provider : "gemini"`, rhisper does more than transcribe blindly: in the same request it removes slips (fillers, false starts, self-corrections), keeps your meaning and wording, and groups several ideas into paragraphs. "hello my name is, oh, Dan Peter" is typed as "Hello, my name is Dan Peter." Nothing is added or rewritten.
+
+What gets typed also depends on where the cursor is, so rhisper looks at the focused application:
+
+| Destination | Line breaks | Lists |
+|-------------|-------------|-------|
+| Terminal, or not detected | no (a line break is an Enter keypress that would run a command) | no |
+| Other apps | yes | no |
+| Browsers, email clients (e.g. Thunderbird) | yes | bullet or numbered, only when you dictate an enumeration |
+
+Only the application name and its category are sent to Gemini, never window titles or contents. Detection is best effort and uses whichever of these tools is available: `hyprctl` (Hyprland), `swaymsg` (Sway), `kdotool` (KDE), `xdotool` (X11) or, on macOS, `osascript` (macOS may ask for Automation permission). On GNOME under Wayland there is no way to read the focused window, so those destinations are treated as unknown and typed as a single plain line. Run `rhisper --log` to see what was detected.
+
+If polishing fails, rhisper retries once with the plain verbatim transcript, so a dictation is never lost.
+
+Set `polish : "off"` to get the plain transcript exactly as before. In an app where a typed line break sends the message (many chat boxes), use `paste-mode : "clipboard-restore"` so multi-paragraph text is pasted rather than typed.
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -309,6 +327,7 @@ The default model is `gemini-3.5-flash-lite`; set `model` to use another one. Ge
 | `long-recording-threshold` | `1000` | Duration in seconds above which Groq's larger `whisper-large-v3` model is used instead of `whisper-large-v3-turbo`. Groq only |
 | `transcription-prompt` | _(empty)_ | Context hint passed to the transcription model to improve accuracy (e.g. common words, names, or domain vocabulary) |
 | `language` | _(empty)_ | ISO-639-1 code (e.g. `de`, `en`, `fr`) to force the transcription language — leave empty to auto-detect |
+| `polish` | `auto` | Light cleanup of dictation, see [Polishing](#polishing-gemini-only). `auto` is on for `gemini` and off for every other provider; `on` is the same today (only Gemini supports it); `off` types the plain transcript |
 | `paste-mode` | `type` | `type` (layout-sensitive, keeps clipboard), `clipboard` (always paste via clipboard, overwrites clipboard), or `clipboard-restore` (like `clipboard`, but saves and restores previous clipboard content) |
 | `non-ascii-initial-delay` | `0.15` | Seconds to wait before pasting the first non-ASCII clipboard chunk — increase if the first character is wrong |
 | `non-ascii-default-delay` | `0.025` | Seconds to wait before subsequent non-ASCII clipboard chunks |
